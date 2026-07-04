@@ -17,6 +17,7 @@ export async function POST(req) {
       modalidade: body.modalidade || 'volei',
       formato: body.formato || 'grupos_eliminatoria',
       data_evento: body.data_evento || null,
+      disputa_terceiro: !!body.disputa_terceiro,
     })
     .select()
     .single();
