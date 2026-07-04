@@ -232,3 +232,207 @@ export default function EtapaPage() {
     } else if (torneio.groups && torneio.groups.length) {
       torneio.groups.forEach((g) => {
         const standings = computeStandings(g, torneio.groupMatches, TIEBREAK);
+        standings.forEach((t, i) => {
+          colocacoes[t.id] = i + 1;
+        });
+      });
+    }
+    if (Object.keys(colocacoes).length === 0) {
+      alert('Nenhum resultado disponível ainda.');
+      return;
+    }
+    const { data: pontosTabela } = await supabase.from('pontos_colocacao').select('*');
+    const resultados = Object.entries(colocacoes).map(([participante_id, colocacao]) => ({
+      participante_id,
+      colocacao,
+      pontos: pontosPorColocacao(colocacao, pontosTabela || []),
+    }));
+    setBusy(true);
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}/resultados`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ resultados }),
+    });
+    setBusy(false);
+    if (res.ok) load();
+    else alert('Erro ao salvar resultados finais.');
+  }
+
+  async function handleReabrir() {
+    if (!confirm('Reabrir esta etapa? O resultado final salvo será apagado.')) return;
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}/resultados`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+    });
+    if (res.ok) load();
+  }
+
+  if (loading) return <div className="page"><div className="empty-hint">Carregando...</div></div>;
+  if (!etapa) return <div className="page"><div className="empty-hint">Etapa não encontrada.</div></div>;
+
+  const locked = etapa.status !== 'planejada';
+
+  return (
+    <div className="page">
+      <PageHeader title={etapa.nome} icon="🏐" />
+
+      <div className="card">
+        {!editingEtapa ? (
+          <>
+            <div className="grid2">
+              <div>
+                <span className="field-label">Modalidade</span>
+                <div>{MODALIDADES[etapa.modalidade]}</div>
+              </div>
+              <div>
+                <span className="field-label">Formato</span>
+                <div>{FORMATOS[etapa.formato]}</div>
+              </div>
+            </div>
+            <div className="grid2" style={{ marginTop: 10 }}>
+              <div>
+                <span className="field-label">Data</span>
+                <div>{etapa.data_evento || '—'}</div>
+              </div>
+              <div>
+                <span className="field-label">Disputa de 3º/4º lugar</span>
+                <div>{etapa.disputa_terceiro ? 'Habilitada (jogo real)' : 'Desabilitada (empatados em 3º)'}</div>
+              </div>
+            </div>
+            <div className="footer-actions">
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEtapaForm(etapa); setEditingEtapa(true); }}>
+                ✏️ Editar etapa
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={handleDeleteEtapa}>
+                🗑️ Excluir etapa
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleSaveEtapa}>
+            <div className="grid2">
+              <div className="field">
+                <label className="field-label">Nome da etapa</label>
+                <input type="text" value={etapaForm.nome} onChange={(e) => setEtapaForm({ ...etapaForm, nome: e.target.value })} required />
+              </div>
+              <div className="field">
+                <label className="field-label">Data</label>
+                <input type="date" value={etapaForm.data_evento || ''} onChange={(e) => setEtapaForm({ ...etapaForm, data_evento: e.target.value })} />
+              </div>
+              <div className="field">
+                <label className="field-label">Modalidade{locked ? ' (travado após sorteio)' : ''}</label>
+                <select value={etapaForm.modalidade} onChange={(e) => setEtapaForm({ ...etapaForm, modalidade: e.target.value })} disabled={locked}>
+                  {Object.entries(MODALIDADES).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label className="field-label">Formato{locked ? ' (travado após sorteio)' : ''}</label>
+                <select value={etapaForm.formato} onChange={(e) => setEtapaForm({ ...etapaForm, formato: e.target.value })} disabled={locked}>
+                  {Object.entries(FORMATOS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {etapa.formato !== 'grupos_apenas' && (
+              <label className="chk-wrap" style={{ marginTop: 6, marginBottom: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={!!etapaForm.disputa_terceiro}
+                  disabled={locked}
+                  onChange={(e) => setEtapaForm({ ...etapaForm, disputa_terceiro: e.target.checked })}
+                />{' '}
+                Disputar 3º/4º lugar em jogo real{locked ? ' (travado após sorteio)' : ' (senão, os dois semifinalistas ficam empatados em 3º)'}
+              </label>
+            )}
+            <div className="footer-actions">
+              <button className="btn btn-primary" type="submit">Salvar</button>
+              <button className="btn btn-ghost" type="button" onClick={() => setEditingEtapa(false)}>Cancelar</button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {etapa.status === 'finalizada' && finalResults && (
+        <div className="card">
+          <h2 className="section-title">🏆 Resultado final</h2>
+          <table className="standings">
+            <thead>
+              <tr>
+                <th>Colocação</th>
+                <th>Dupla</th>
+                <th>Pontos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {finalResults.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.colocacao}º</td>
+                  <td>{participanteNome(r.participante_id)}</td>
+                  <td>{r.pontos}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="footer-actions">
+            <button className="btn btn-ghost btn-sm" onClick={handleReabrir}>
+              🔄 Reabrir etapa
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!locked && (
+        <div className="card">
+          <h2 className="section-title">Duplas / participantes ({participantes.length})</h2>
+          <div className="teams-list">
+            {participantes.map((p) => (
+              <div key={p.id} className="team-row">
+                {p.cabeca_de_chave && <span className="seed-tag">Cabeça de chave</span>}
+                <span className="tname">{participanteNome(p.id)}</span>
+                <button className="icon-btn" onClick={() => handleRemoveParticipante(p.id)}>
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={handleAddParticipante} className="add-team-form">
+            <select value={pForm.atleta1_id} onChange={(e) => setPForm({ ...pForm, atleta1_id: e.target.value })} required>
+              <option value="">Atleta 1</option>
+              {atletas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
+              ))}
+            </select>
+            <select value={pForm.atleta2_id} onChange={(e) => setPForm({ ...pForm, atleta2_id: e.target.value })}>
+              <option value="">Atleta 2 (opcional)</option>
+              {atletas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
+              ))}
+            </select>
+            <label className="chk-wrap">
+              <input
+                type="checkbox"
+                checked={pForm.cabeca_de_chave}
+                onChange={(e) => setPForm({ ...pForm, cabeca_de_chave: e.target.checked })}
+              />{' '}
+              Cabeça de chave
+            </label>
+            <button className="btn btn-ocean btn-sm" type="submit" disabled={busy}>
+              + Adicionar dupla
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!locked && etapa.formato !== 'eliminatoria_simples' && (
+        <div className="card">
+          <h2 className="section-title">Configuração do sorteio</h2>
+          <div
