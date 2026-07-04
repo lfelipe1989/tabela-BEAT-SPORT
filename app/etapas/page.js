@@ -53,6 +53,19 @@ export default function EtapasPage() {
     }
   }
 
+  async function handleDelete(e, id, nome) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Excluir a etapa "${nome}"? Isso apaga também as duplas e resultados dela. Essa ação não pode ser desfeita.`)) return;
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': password },
+    });
+    if (res.ok) load();
+    else alert((await res.json()).error || 'Erro ao excluir etapa');
+  }
+
   return (
     <div className="page">
       <PageHeader title="Etapas" icon="🏐" />
@@ -110,6 +123,9 @@ export default function EtapasPage() {
               <span className="tmeta">
                 {MODALIDADES[e.modalidade]} · {FORMATOS[e.formato]} · {STATUS_LABEL[e.status]}
               </span>
+              <button className="icon-btn" onClick={(ev) => handleDelete(ev, e.id, e.nome)} title="Excluir etapa">
+                🗑️
+              </button>
             </Link>
           ))}
         </div>
