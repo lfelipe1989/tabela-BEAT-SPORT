@@ -683,11 +683,3 @@ function SetsForm({ editingSets, setEditingSets, onSave, onCancel }) {
     </div>
   );
 }
-Antes de commitar, verificação importante: role até o final do editor do GitHub e confirme que as últimas linhas são exatamente:
-        <button className="btn btn-sm btn-ghost" onClick={onCancel}>
-          Cancelar
-        </button>
-      </div>
-    </div>
-  );
-}
