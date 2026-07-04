@@ -16,7 +16,7 @@ const STATUS_LABEL = { planejada: 'Planejada', em_andamento: 'Em andamento', fin
 export default function EtapasPage() {
   const [etapas, setEtapas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '' });
+  const [form, setForm] = useState({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '', disputa_terceiro: false });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -44,7 +44,7 @@ export default function EtapasPage() {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erro ao salvar');
-      setForm({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '' });
+      setForm({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '', disputa_terceiro: false });
       await load();
     } catch (err) {
       setError(err.message);
@@ -107,6 +107,16 @@ export default function EtapasPage() {
             </button>
           </div>
         </form>
+        {form.formato !== 'grupos_apenas' && (
+          <label className="chk-wrap" style={{ marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={form.disputa_terceiro}
+              onChange={(e) => setForm({ ...form, disputa_terceiro: e.target.checked })}
+            />{' '}
+            Disputar 3º/4º lugar em jogo real (senão, os dois semifinalistas ficam empatados em 3º)
+          </label>
+        )}
         {error && <div className="warning-box">{error}</div>}
       </div>
 
