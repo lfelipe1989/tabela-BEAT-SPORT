@@ -435,4 +435,259 @@ export default function EtapaPage() {
       {!locked && etapa.formato !== 'eliminatoria_simples' && (
         <div className="card">
           <h2 className="section-title">Configuração do sorteio</h2>
-          <div
+          <div className="grid2">
+            <div className="field">
+              <label className="field-label">Número de grupos</label>
+              <input
+                type="number"
+                min="1"
+                value={numGroups}
+                onChange={(e) => setNumGroups(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">Classificados por grupo</label>
+              <input
+                type="number"
+                min="1"
+                value={qualifiersPerGroup}
+                onChange={(e) => setQualifiersPerGroup(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!locked && (
+        <div className="footer-actions">
+          <button className="btn btn-primary" onClick={handleDraw} disabled={participantes.length < 2}>
+            🎲 Realizar sorteio
+          </button>
+        </div>
+      )}
+
+      {torneio && torneio.groups && torneio.groups.length > 0 && (
+        <>
+          <h2 className="section-title">Fase de grupos</h2>
+          <div className="groups-grid">
+            {torneio.groups.map((g) => {
+              const standings = computeStandings(g, torneio.groupMatches, TIEBREAK);
+              const matches = torneio.groupMatches.filter((m) => m.groupId === g.id);
+              return (
+                <div className="card group-card" key={g.id}>
+                  <h3>{g.name}</h3>
+                  <table className="standings">
+                    <thead>
+                      <tr>
+                        <th>Dupla</th>
+                        <th>J</th>
+                        <th>V</th>
+                        <th>Sets</th>
+                        <th>Saldo</th>
+                        <th>Pontos</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((t, i) => (
+                        <tr key={t.id} className={i < qualifiersPerGroup ? 'qualified' : ''}>
+                          <td>{participanteNome(t.id)}</td>
+                          <td>{t.jogos}</td>
+                          <td>{t.vitorias}</td>
+                          <td>
+                            {t.setsPro}-{t.setsContra}
+                          </td>
+                          <td>
+                            {t.saldoSets > 0 ? '+' : ''}
+                            {t.saldoSets}
+                          </td>
+                          <td>
+                            {t.saldoPontos > 0 ? '+' : ''}
+                            {t.saldoPontos}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ marginTop: 12 }}>
+                    {matches.map((m) => (
+                      <MatchRow
+                        key={m.id}
+                        m={m}
+                        participanteNome={participanteNome}
+                        editing={editingMatchId === m.id}
+                        editingSets={editingSets}
+                        setEditingSets={setEditingSets}
+                        onEdit={() => openEdit(m.id)}
+                        onCancel={() => setEditingMatchId(null)}
+                        onSave={() => saveMatch(m.id, false)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {etapa.formato === 'grupos_eliminatoria' && !torneio.bracket && (
+            <div className="footer-actions">
+              <button className="btn btn-primary" onClick={handleGenKnockout}>
+                🏆 Gerar fase eliminatória
+              </button>
+            </div>
+          )}
+          {etapa.formato === 'grupos_apenas' && etapa.status !== 'finalizada' && (
+            <div className="footer-actions">
+              <button className="btn btn-primary" onClick={handleFinalizar} disabled={busy}>
+                ✅ Finalizar etapa e salvar ranking
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {torneio && torneio.bracket && (
+        <>
+          <h2 className="section-title">Eliminatórias</h2>
+          <div className="bracket-scroll">
+            <div className="bracket">
+              {torneio.bracket.rounds.map((round, idx) => (
+                <div className="round-col" key={idx}>
+                  <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
+                  {round.map((m) => (
+                    <div className="match-box" key={m.id}>
+                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${!m.teamA ? 'bye' : ''}`}>
+                        {m.teamA ? participanteNome(m.teamA) : '—'}
+                      </div>
+                      <div className="vs-div"></div>
+                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${!m.teamB ? 'bye' : ''}`}>
+                        {m.teamB ? participanteNome(m.teamB) : '—'}
+                      </div>
+                      {m.teamA && m.teamB && !m.winner && editingMatchId !== m.id && (
+                        <span className="edit-link" onClick={() => openEdit(m.id)}>
+                          ✏️ Resultado
+                        </span>
+                      )}
+                      {m.teamA && m.teamB && m.winner && editingMatchId !== m.id && (
+                        <span className="edit-link" onClick={() => openEdit(m.id)}>
+                          ✏️ Editar
+                        </span>
+                      )}
+                      {editingMatchId === m.id && (
+                        <SetsForm
+                          editingSets={editingSets}
+                          setEditingSets={setEditingSets}
+                          onSave={() => saveMatch(m.id, true)}
+                          onCancel={() => setEditingMatchId(null)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          {torneio.bracket.thirdPlaceMatch && (
+            <div className="card" style={{ maxWidth: 320 }}>
+              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+                🥉 Disputa de 3º lugar
+              </h3>
+              <MatchRow
+                m={torneio.bracket.thirdPlaceMatch}
+                participanteNome={participanteNome}
+                editing={editingMatchId === torneio.bracket.thirdPlaceMatch.id}
+                editingSets={editingSets}
+                setEditingSets={setEditingSets}
+                onEdit={() => openEdit(torneio.bracket.thirdPlaceMatch.id)}
+                onCancel={() => setEditingMatchId(null)}
+                onSave={() => saveMatch(torneio.bracket.thirdPlaceMatch.id, true)}
+              />
+            </div>
+          )}
+          {torneio.champion && etapa.status !== 'finalizada' && (
+            <div className="champion-box">
+              <div className="trophy">🏆</div>
+              <div className="clabel">Campeão da etapa</div>
+              <div className="cname">{participanteNome(torneio.champion)}</div>
+              <div className="footer-actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+                <button className="btn btn-primary" onClick={handleFinalizar} disabled={busy}>
+                  ✅ Salvar resultado final no ranking
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function MatchRow({ m, participanteNome, editing, editingSets, setEditingSets, onEdit, onCancel, onSave }) {
+  const isBye = !m.teamA || !m.teamB;
+  const r = m.sets && m.sets.length ? computeSetsResult(m.sets) : null;
+  return (
+    <div className="match-row">
+      <div className="match-top">
+        <div className="match-teams">
+          {participanteNome(m.teamA)} <span style={{ color: '#aaa' }}>vs</span> {participanteNome(m.teamB)}
+        </div>
+        {r && (
+          <div className="match-score">
+            {r.setsA} x {r.setsB}
+          </div>
+        )}
+        <div className={`match-status ${m.winner ? 'status-done' : 'status-pending'}`}>
+          {m.winner ? 'Concluída' : isBye ? 'BYE' : 'Pendente'}
+        </div>
+      </div>
+      {!isBye && !m.winner && !editing && (
+        <button className="btn btn-sm btn-ghost" onClick={onEdit} style={{ marginTop: 6 }}>
+          ✏️ Registrar resultado
+        </button>
+      )}
+      {!isBye && m.winner && !editing && (
+        <button className="btn btn-sm btn-ghost" onClick={onEdit} style={{ marginTop: 6 }}>
+          ✏️ Editar resultado
+        </button>
+      )}
+      {editing && <SetsForm editingSets={editingSets} setEditingSets={setEditingSets} onSave={onSave} onCancel={onCancel} />}
+    </div>
+  );
+}
+
+function SetsForm({ editingSets, setEditingSets, onSave, onCancel }) {
+  function updateSet(i, side, val) {
+    const copy = editingSets.map((s) => [...s]);
+    copy[i][side] = parseInt(val) || 0;
+    setEditingSets(copy);
+  }
+  return (
+    <div className="sets-form">
+      {editingSets.map((s, i) => (
+        <div className="set-row" key={i}>
+          <span>Set {i + 1}:</span>
+          <input type="number" min="0" value={s[0]} onChange={(e) => updateSet(i, 0, e.target.value)} />
+          <span>x</span>
+          <input type="number" min="0" value={s[1]} onChange={(e) => updateSet(i, 1, e.target.value)} />
+        </div>
+      ))}
+      <div className="sets-actions">
+        <button className="btn btn-sm btn-ghost" onClick={() => setEditingSets([...editingSets, [0, 0]])}>
+          + Set
+        </button>
+        <button className="btn btn-sm btn-ocean" onClick={onSave}>
+          Salvar resultado
+        </button>
+        <button className="btn btn-sm btn-ghost" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+Antes de commitar, verificação importante: role até o final do editor do GitHub e confirme que as últimas linhas são exatamente:
+        <button className="btn btn-sm btn-ghost" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
