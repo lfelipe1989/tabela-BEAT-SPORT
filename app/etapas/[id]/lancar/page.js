@@ -10,6 +10,7 @@ import {
   placementsFromBracket,
   thirdPlacePending,
   roundLabel,
+  isByeId,
 } from '../../../../lib/bracketEngine';
 import { pontosPorColocacao } from '../../../../lib/ranking';
 
@@ -62,6 +63,7 @@ function LancarResultadoPage() {
     return a ? a.apelido || a.nome : '—';
   }
   function participanteNome(pid) {
+    if (isByeId(pid)) return 'BYE';
     const p = participantes.find((x) => x.id === pid);
     if (!p) return '—';
     return p.atleta2_id ? `${atletaNome(p.atleta1_id)} / ${atletaNome(p.atleta2_id)}` : atletaNome(p.atleta1_id);
@@ -153,11 +155,13 @@ function LancarResultadoPage() {
       return;
     }
     const { data: pontosTabela } = await supabase.from('pontos_colocacao').select('*');
-    const resultados = Object.entries(colocacoes).map(([participante_id, colocacao]) => ({
-      participante_id,
-      colocacao,
-      pontos: pontosPorColocacao(colocacao, pontosTabela || []),
-    }));
+    const resultados = Object.entries(colocacoes)
+      .filter(([participante_id]) => !isByeId(participante_id))
+      .map(([participante_id, colocacao]) => ({
+        participante_id,
+        colocacao,
+        pontos: pontosPorColocacao(colocacao, pontosTabela || []),
+      }));
     setBusy(true);
     const res = await fetch(`/api/etapas/${id}/resultados`, {
       method: 'POST',
@@ -291,11 +295,11 @@ function LancarResultadoPage() {
                   <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
                   {round.map((m) => (
                     <div className="match-box" key={m.id}>
-                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${!m.teamA ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
                         {m.teamA ? participanteNome(m.teamA) : '—'}
                       </div>
                       <div className="vs-div"></div>
-                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${!m.teamB ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
                         {m.teamB ? participanteNome(m.teamB) : '—'}
                       </div>
                       {m.teamA && m.teamB && !m.winner && editingMatchId !== m.id && (

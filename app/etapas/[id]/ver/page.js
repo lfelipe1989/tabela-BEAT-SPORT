@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../../lib/supabaseClient';
-import { computeStandings, computeSetsResult, roundLabel } from '../../../../lib/bracketEngine';
+import { computeStandings, computeSetsResult, roundLabel, isByeId } from '../../../../lib/bracketEngine';
 
 const TIEBREAK = ['confronto_direto', 'vitorias', 'saldo_sets', 'saldo_pontos', 'sets_pro', 'pontos_pro'];
 const FORMATOS = {
@@ -48,6 +48,7 @@ export default function VerEtapaPage() {
     return a ? a.apelido || a.nome : '—';
   }
   function participanteNome(pid) {
+    if (isByeId(pid)) return 'BYE';
     const p = participantes.find((x) => x.id === pid);
     if (!p) return '—';
     return p.atleta2_id ? `${atletaNome(p.atleta1_id)} / ${atletaNome(p.atleta2_id)}` : atletaNome(p.atleta1_id);
@@ -209,11 +210,11 @@ export default function VerEtapaPage() {
                   <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
                   {round.map((m) => (
                     <div className="match-box" key={m.id}>
-                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${!m.teamA ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
                         {m.teamA ? participanteNome(m.teamA) : '—'}
                       </div>
                       <div className="vs-div"></div>
-                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${!m.teamB ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
                         {m.teamB ? participanteNome(m.teamB) : '—'}
                       </div>
                     </div>

@@ -9,6 +9,7 @@ const FORMATOS = {
   grupos_eliminatoria: 'Grupos + eliminatórias',
   eliminatoria_simples: 'Eliminatória simples',
   grupos_apenas: 'Somente grupos',
+  dupla_eliminatoria_ate_semi: 'Dupla eliminação até a semifinal',
 };
 const MODALIDADES = { volei: '🏐 Vôlei de praia', futevolei: '⚽ Futevôlei', beach_tenis: '🎾 Beach tênis' };
 const STATUS_LABEL = { planejada: 'Planejada', em_andamento: 'Em andamento', finalizada: 'Finalizada' };
@@ -107,6 +108,9 @@ export default function EtapasPage() {
             </button>
           </div>
         </form>
+        {form.formato === 'dupla_eliminatoria_ate_semi' && (
+          <div className="warning-box">Esse formato funciona de forma confiável com número de duplas em potência de 2 (4, 8, 16 ou 32). Com outros números, use "Eliminatória simples" ou "Grupos + eliminatórias" em vez desse.</div>
+        )}
         {form.formato !== 'grupos_apenas' && (
           <label className="chk-wrap" style={{ marginTop: 4 }}>
             <input

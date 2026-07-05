@@ -13,6 +13,11 @@ import {
   placementsFromBracket,
   thirdPlacePending,
   roundLabel,
+  performDoubleElimDraw,
+  advanceDoubleElim,
+  placementsFromDoubleElim,
+  thirdPlacePendingDoubleElim,
+  isByeId,
 } from '../../../lib/bracketEngine';
 import { pontosPorColocacao } from '../../../lib/ranking';
 
@@ -21,6 +26,7 @@ const FORMATOS = {
   grupos_eliminatoria: 'Grupos + eliminatórias',
   eliminatoria_simples: 'Eliminatória simples',
   grupos_apenas: 'Somente grupos',
+  dupla_eliminatoria_ate_semi: 'Dupla eliminação até a semifinal',
 };
 const MODALIDADES = { volei: '🏐 Vôlei de praia', futevolei: '⚽ Futevôlei', beach_tenis: '🎾 Beach tênis' };
 
@@ -75,6 +81,7 @@ export default function EtapaPage() {
     return a ? a.apelido || a.nome : '—';
   }
   function participanteNome(pid) {
+    if (isByeId(pid)) return 'BYE';
     const p = participantes.find((x) => x.id === pid);
     if (!p) return '—';
     return p.atleta2_id ? `${atletaNome(p.atleta1_id)} / ${atletaNome(p.atleta2_id)}` : atletaNome(p.atleta1_id);
@@ -193,6 +200,16 @@ export default function EtapaPage() {
 
   function handleDraw() {
     if (!confirm('Confirmar sorteio? As duplas ficarão travadas para esta etapa.')) return;
+
+    if (etapa.formato === 'dupla_eliminatoria_ate_semi') {
+      const result = performDoubleElimDraw(teams);
+      const adv = advanceDoubleElim(result, etapa.disputa_terceiro);
+      const t = { doubleElim: { ...result, ...adv } };
+      setTorneio(t);
+      saveEstado(t, 'em_andamento');
+      return;
+    }
+
     const result = performDraw(etapa.formato, teams, numGroups);
     let t = { ...result, champion: null, qualifiersPerGroup };
     if (t.bracket) {
@@ -218,6 +235,27 @@ export default function EtapaPage() {
     const r = computeSetsResult(sets);
     setTorneio((prev) => {
       let next = { ...prev };
+
+      if (next.doubleElim) {
+        const de = { ...next.doubleElim };
+        const applyResult = (m) => {
+          const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
+          return { ...m, sets, winner };
+        };
+        if (de.finalMatch && de.finalMatch.id === matchId) {
+          de.finalMatch = applyResult(de.finalMatch);
+        } else if (de.thirdPlaceMatch && de.thirdPlaceMatch.id === matchId) {
+          de.thirdPlaceMatch = applyResult(de.thirdPlaceMatch);
+        } else {
+          de.winners = { rounds: de.winners.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
+          de.losers = { ...de.losers, rounds: de.losers.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
+        }
+        const adv = advanceDoubleElim(de, etapa.disputa_terceiro);
+        next.doubleElim = { ...de, ...adv };
+        saveEstado(next, 'em_andamento');
+        return next;
+      }
+
       if (!isBracket) {
         next.groupMatches = next.groupMatches.map((m) => {
           if (m.id !== matchId) return m;
@@ -262,6 +300,36 @@ export default function EtapaPage() {
   }
 
   async function handleFinalizar() {
+    if (torneio.doubleElim) {
+      if (thirdPlacePendingDoubleElim(torneio.doubleElim)) {
+        alert('A disputa de 3º lugar está habilitada e ainda não tem resultado. Lance o resultado dela antes de finalizar.');
+        return;
+      }
+      const colocacoes = placementsFromDoubleElim(torneio.doubleElim);
+      if (Object.keys(colocacoes).length === 0) {
+        alert('Nenhum resultado disponível ainda.');
+        return;
+      }
+      const { data: pontosTabela } = await supabase.from('pontos_colocacao').select('*');
+      const resultados = Object.entries(colocacoes)
+        .filter(([participante_id]) => !isByeId(participante_id))
+        .map(([participante_id, colocacao]) => ({
+          participante_id,
+          colocacao,
+          pontos: pontosPorColocacao(colocacao, pontosTabela || []),
+        }));
+      setBusy(true);
+      const password = getAdminPassword();
+      const res = await fetch(`/api/etapas/${id}/resultados`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ resultados }),
+      });
+      setBusy(false);
+      if (res.ok) load();
+      else alert('Erro ao salvar resultados finais.');
+      return;
+    }
     if (torneio.bracket && thirdPlacePending(torneio.bracket)) {
       alert('A disputa de 3º lugar está habilitada e ainda não tem resultado. Lance o resultado dela antes de finalizar.');
       return;
@@ -282,11 +350,13 @@ export default function EtapaPage() {
       return;
     }
     const { data: pontosTabela } = await supabase.from('pontos_colocacao').select('*');
-    const resultados = Object.entries(colocacoes).map(([participante_id, colocacao]) => ({
-      participante_id,
-      colocacao,
-      pontos: pontosPorColocacao(colocacao, pontosTabela || []),
-    }));
+    const resultados = Object.entries(colocacoes)
+      .filter(([participante_id]) => !isByeId(participante_id))
+      .map(([participante_id, colocacao]) => ({
+        participante_id,
+        colocacao,
+        pontos: pontosPorColocacao(colocacao, pontosTabela || []),
+      }));
     setBusy(true);
     const password = getAdminPassword();
     const res = await fetch(`/api/etapas/${id}/resultados`, {
@@ -511,7 +581,7 @@ export default function EtapaPage() {
         </div>
       )}
 
-      {!locked && etapa.formato !== 'eliminatoria_simples' && (
+      {!locked && etapa.formato !== 'eliminatoria_simples' && etapa.formato !== 'dupla_eliminatoria_ate_semi' && (
         <div className="card">
           <h2 className="section-title">Configuração do sorteio</h2>
           <div className="grid2">
@@ -623,6 +693,115 @@ export default function EtapaPage() {
         </>
       )}
 
+      {torneio && torneio.doubleElim && (
+        <>
+          <h2 className="section-title">Chave principal</h2>
+          <div className="bracket-scroll">
+            <div className="bracket">
+              {torneio.doubleElim.winners.rounds.map((round, idx) => {
+                const total = torneio.doubleElim.winners.rounds.length;
+                const isFinal = idx === total - 1;
+                return (
+                  <div className="round-col" key={'w' + idx}>
+                    <div className="round-label">{isFinal ? 'Final da chave principal (semifinal A)' : 'Rodada ' + (idx + 1)}</div>
+                    {round.map((m) => (
+                      <BracketMatchBox
+                        key={m.id}
+                        m={m}
+                        participanteNome={participanteNome}
+                        editingMatchId={editingMatchId}
+                        editingSets={editingSets}
+                        setEditingSets={setEditingSets}
+                        openEdit={openEdit}
+                        setEditingMatchId={setEditingMatchId}
+                        onSave={() => saveMatch(m.id, true)}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <h2 className="section-title">Repescagem</h2>
+          <div className="bracket-scroll">
+            <div className="bracket">
+              {torneio.doubleElim.losers.rounds.map((round, idx) => {
+                const total = torneio.doubleElim.losers.rounds.length;
+                const isFinal = idx === total - 1 && round.length === 1;
+                return (
+                  <div className="round-col" key={'l' + idx}>
+                    <div className="round-label">{isFinal ? 'Final da repescagem (semifinal B)' : 'Rodada ' + (idx + 1)}</div>
+                    {round.map((m) => (
+                      <BracketMatchBox
+                        key={m.id}
+                        m={m}
+                        participanteNome={participanteNome}
+                        editingMatchId={editingMatchId}
+                        editingSets={editingSets}
+                        setEditingSets={setEditingSets}
+                        openEdit={openEdit}
+                        setEditingMatchId={setEditingMatchId}
+                        onSave={() => saveMatch(m.id, true)}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {torneio.doubleElim.finalMatch && (
+            <div className="card" style={{ maxWidth: 320 }}>
+              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+                🏁 Final
+              </h3>
+              <BracketMatchBox
+                m={torneio.doubleElim.finalMatch}
+                participanteNome={participanteNome}
+                editingMatchId={editingMatchId}
+                editingSets={editingSets}
+                setEditingSets={setEditingSets}
+                openEdit={openEdit}
+                setEditingMatchId={setEditingMatchId}
+                onSave={() => saveMatch(torneio.doubleElim.finalMatch.id, true)}
+              />
+            </div>
+          )}
+
+          {torneio.doubleElim.thirdPlaceMatch && (
+            <div className="card" style={{ maxWidth: 320 }}>
+              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+                🥉 Disputa de 3º lugar
+              </h3>
+              <BracketMatchBox
+                m={torneio.doubleElim.thirdPlaceMatch}
+                participanteNome={participanteNome}
+                editingMatchId={editingMatchId}
+                editingSets={editingSets}
+                setEditingSets={setEditingSets}
+                openEdit={openEdit}
+                setEditingMatchId={setEditingMatchId}
+                onSave={() => saveMatch(torneio.doubleElim.thirdPlaceMatch.id, true)}
+              />
+            </div>
+          )}
+
+          {torneio.doubleElim.champion && etapa.status !== 'finalizada' && (
+            <div className="champion-box">
+              <div className="trophy">🏆</div>
+              <div className="clabel">Campeão da etapa</div>
+              <div className="cname">{participanteNome(torneio.doubleElim.champion)}</div>
+              <div className="footer-actions" style={{ justifyContent: 'center', marginTop: 14 }}>
+                <button className="btn btn-primary" onClick={handleFinalizar} disabled={busy}>
+                  ✅ Salvar resultado final no ranking
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {torneio && torneio.bracket && (
         <>
           <h2 className="section-title">Eliminatórias</h2>
@@ -633,11 +812,11 @@ export default function EtapaPage() {
                   <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
                   {round.map((m) => (
                     <div className="match-box" key={m.id}>
-                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${!m.teamA ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
                         {m.teamA ? participanteNome(m.teamA) : '—'}
                       </div>
                       <div className="vs-div"></div>
-                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${!m.teamB ? 'bye' : ''}`}>
+                      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
                         {m.teamB ? participanteNome(m.teamB) : '—'}
                       </div>
                       {m.teamA && m.teamB && !m.winner && editingMatchId !== m.id && (
@@ -694,6 +873,35 @@ export default function EtapaPage() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+function BracketMatchBox({ m, participanteNome, editingMatchId, editingSets, setEditingSets, openEdit, setEditingMatchId, onSave }) {
+  const editing = editingMatchId === m.id;
+  return (
+    <div className="match-box">
+      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
+        {m.teamA ? participanteNome(m.teamA) : '—'}
+      </div>
+      <div className="vs-div"></div>
+      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
+        {m.teamB ? participanteNome(m.teamB) : '—'}
+      </div>
+      {m.teamA && m.teamB && !m.winner && !editing && (
+        <span className="edit-link" onClick={() => openEdit(m.id)}>✏️ Resultado</span>
+      )}
+      {m.teamA && m.teamB && m.winner && !editing && (
+        <span className="edit-link" onClick={() => openEdit(m.id)}>✏️ Editar</span>
+      )}
+      {editing && (
+        <SetsForm
+          editingSets={editingSets}
+          setEditingSets={setEditingSets}
+          onSave={onSave}
+          onCancel={() => setEditingMatchId(null)}
+        />
       )}
     </div>
   );
