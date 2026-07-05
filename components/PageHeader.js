@@ -6,7 +6,9 @@ export default function PageHeader({ title, icon }) {
     <header className="topbar">
       <div className="topbar-row">
         <div className="brand">
-          <span className="icon">{icon}</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-branco.svg" alt="BEAT Sports" className="brand-logo" />
+          <span className="brand-sep">|</span>
           <h1 className="brand-title">{title}</h1>
         </div>
         <Link href="/" className="btn btn-ghost btn-sm">

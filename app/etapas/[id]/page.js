@@ -762,7 +762,7 @@ export default function EtapaPage() {
               <div className="groups-grid">
                 {torneio.doubleElim.semifinals.map((m, i) => (
                   <div className="card" key={m.id} style={{ maxWidth: 320 }}>
-                    <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+                    <h3 style={{ fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' }}>
                       Semifinal {i + 1}
                     </h3>
                     <BracketMatchBox
@@ -783,7 +783,7 @@ export default function EtapaPage() {
 
           {torneio.doubleElim.finalMatch && (
             <div className="card" style={{ maxWidth: 320 }}>
-              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+              <h3 style={{ fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' }}>
                 🏁 Final
               </h3>
               <BracketMatchBox
@@ -801,7 +801,7 @@ export default function EtapaPage() {
 
           {torneio.doubleElim.thirdPlaceMatch && (
             <div className="card" style={{ maxWidth: 320 }}>
-              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+              <h3 style={{ fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' }}>
                 🥉 Disputa de 3º lugar
               </h3>
               <BracketMatchBox
@@ -875,7 +875,7 @@ export default function EtapaPage() {
           </div>
           {torneio.bracket.thirdPlaceMatch && (
             <div className="card" style={{ maxWidth: 320 }}>
-              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+              <h3 style={{ fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' }}>
                 🥉 Disputa de 3º lugar
               </h3>
               <MatchRow

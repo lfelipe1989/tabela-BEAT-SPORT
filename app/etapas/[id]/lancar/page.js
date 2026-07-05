@@ -182,7 +182,9 @@ function LancarResultadoPage() {
       <header className="topbar">
         <div className="topbar-row">
           <div className="brand">
-            <span className="icon">📝</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-branco.svg" alt="BEAT Sports" className="brand-logo" />
+            <span className="brand-sep">|</span>
             <h1 className="brand-title">{etapa.nome}</h1>
           </div>
         </div>
@@ -324,7 +326,7 @@ function LancarResultadoPage() {
           </div>
           {torneio.bracket.thirdPlaceMatch && (
             <div className="card" style={{ maxWidth: 320 }}>
-              <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+              <h3 style={{ fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' }}>
                 🥉 Disputa de 3º lugar
               </h3>
               <MatchRow

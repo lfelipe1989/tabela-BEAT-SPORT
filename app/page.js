@@ -6,8 +6,8 @@ export default function Home() {
       <header className="topbar">
         <div className="topbar-row">
           <div className="brand">
-            <span className="icon">🏖️</span>
-            <h1 className="brand-title">BEAT Torneio</h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-branco.svg" alt="BEAT Sports" className="brand-logo-home" />
           </div>
         </div>
       </header>
