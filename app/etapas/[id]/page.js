@@ -41,6 +41,8 @@ export default function EtapaPage() {
   const [pForm, setPForm] = useState({ atleta1_id: '', atleta2_id: '', cabeca_de_chave: false });
   const [editingEtapa, setEditingEtapa] = useState(false);
   const [etapaForm, setEtapaForm] = useState(null);
+  const [shareToken, setShareToken] = useState(null);
+  const [loadingToken, setLoadingToken] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,10 +154,47 @@ export default function EtapaPage() {
     else alert((await res.json()).error || 'Erro ao excluir etapa');
   }
 
+  async function handleShowToken() {
+    setLoadingToken(true);
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}/token`, {
+      headers: { 'x-admin-password': password },
+    });
+    setLoadingToken(false);
+    if (res.ok) {
+      const data = await res.json();
+      setShareToken(data.token);
+    } else {
+      alert('Erro ao buscar o link.');
+    }
+  }
+
+  async function handleRegenerateToken() {
+    if (!confirm('Gerar um novo link? O link antigo de lançar resultado deixa de funcionar.')) return;
+    setLoadingToken(true);
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}/token`, {
+      method: 'POST',
+      headers: { 'x-admin-password': password },
+    });
+    setLoadingToken(false);
+    if (res.ok) {
+      const data = await res.json();
+      setShareToken(data.token);
+    } else {
+      alert('Erro ao gerar novo link.');
+    }
+  }
+
+  function copyLink(url) {
+    navigator.clipboard.writeText(url);
+    alert('Link copiado!');
+  }
+
   function handleDraw() {
     if (!confirm('Confirmar sorteio? As duplas ficarão travadas para esta etapa.')) return;
     const result = performDraw(etapa.formato, teams, numGroups);
-    let t = { ...result, champion: null };
+    let t = { ...result, champion: null, qualifiersPerGroup };
     if (t.bracket) {
       const adv = advanceBracket(t.bracket, etapa.disputa_terceiro);
       t.bracket = adv.bracket;
@@ -208,7 +247,8 @@ export default function EtapaPage() {
   }
 
   function handleGenKnockout() {
-    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qualifiersPerGroup, teams);
+    const qtd = torneio.qualifiersPerGroup || qualifiersPerGroup;
+    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, teams);
     if (!bracket) {
       alert('Não há duplas suficientes classificadas.');
       return;
@@ -357,6 +397,45 @@ export default function EtapaPage() {
         )}
       </div>
 
+      <div className="card">
+        <h2 className="section-title">🔗 Compartilhar</h2>
+        <div className="grid2">
+          <div>
+            <label className="field-label">Link de visualização (tabela e próximos jogos, sem senha)</label>
+            <div className="footer-actions" style={{ marginTop: 6 }}>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => copyLink(`${window.location.origin}/etapas/${id}/ver`)}
+              >
+                📋 Copiar link de visualização
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="field-label">Link para lançar resultado (sem senha de admin)</label>
+            <div className="footer-actions" style={{ marginTop: 6 }}>
+              {!shareToken ? (
+                <button className="btn btn-ghost btn-sm" onClick={handleShowToken} disabled={loadingToken}>
+                  🔒 Ver link de lançamento
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-ocean btn-sm"
+                    onClick={() => copyLink(`${window.location.origin}/etapas/${id}/lancar?t=${shareToken}`)}
+                  >
+                    📋 Copiar link de lançamento
+                  </button>
+                  <button className="btn btn-ghost btn-sm" onClick={handleRegenerateToken} disabled={loadingToken}>
+                    🔄 Gerar novo link
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {etapa.status === 'finalizada' && finalResults && (
         <div className="card">
           <h2 className="section-title">🏆 Resultado final</h2>
@@ -489,7 +568,7 @@ export default function EtapaPage() {
                     </thead>
                     <tbody>
                       {standings.map((t, i) => (
-                        <tr key={t.id} className={i < qualifiersPerGroup ? 'qualified' : ''}>
+                        <tr key={t.id} className={i < (torneio.qualifiersPerGroup || qualifiersPerGroup) ? 'qualified' : ''}>
                           <td>{participanteNome(t.id)}</td>
                           <td>{t.jogos}</td>
                           <td>{t.vitorias}</td>

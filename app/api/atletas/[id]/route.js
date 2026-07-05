@@ -25,6 +25,8 @@ export async function DELETE(req, { params }) {
   const supabaseAdmin = getSupabaseAdmin();
   const { error } = await supabaseAdmin.from('atletas').delete().eq('id', params.id);
   if (error) {
+    // Se o atleta já participou de alguma etapa, o banco bloqueia a
+    // exclusão (chave estrangeira) para não apagar histórico de ranking.
     if (error.code === '23503') {
       return NextResponse.json(
         { error: 'Esse atleta já participou de alguma etapa e não pode ser excluído (isso apagaria histórico de ranking). Remova-o das duplas das etapas primeiro, se necessário.' },

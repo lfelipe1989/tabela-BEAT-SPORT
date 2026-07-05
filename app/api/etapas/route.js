@@ -22,5 +22,6 @@ export async function POST(req) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await supabaseAdmin.from('etapa_tokens').insert({ etapa_id: data.id });
   return NextResponse.json({ etapa: data });
 }

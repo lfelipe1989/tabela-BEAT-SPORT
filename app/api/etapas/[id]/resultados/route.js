@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin, isValidAdminPassword } from '../../../../../lib/supabaseAdmin';
+import { getSupabaseAdmin, isValidAdminPassword, authorizeEtapaAction } from '../../../../../lib/supabaseAdmin';
 
 export async function POST(req, { params }) {
-  if (!isValidAdminPassword(req)) {
-    return NextResponse.json({ error: 'Senha inválida' }, { status: 401 });
+  const scope = await authorizeEtapaAction(req, params.id);
+  if (!scope) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
   const body = await req.json();
   const resultados = body.resultados || [];
