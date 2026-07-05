@@ -109,7 +109,7 @@ export default function EtapasPage() {
           </div>
         </form>
         {form.formato === 'dupla_eliminatoria_ate_semi' && (
-          <div className="warning-box">Esse formato funciona de forma confiável com número de duplas em potência de 2 (4, 8, 16 ou 32). Com outros números, use "Eliminatória simples" ou "Grupos + eliminatórias" em vez desse.</div>
+          <div className="warning-box">Esse formato exige no mínimo 8 duplas, e funciona de forma mais previsível com número de duplas em potência de 2 (8, 16 ou 32). Com outros números fora disso, o chaveamento entra com BYE pra completar, o que ocasionalmente pode gerar um reencontro entre as mesmas duplas antes da final.</div>
         )}
         {form.formato !== 'grupos_apenas' && (
           <label className="chk-wrap" style={{ marginTop: 4 }}>

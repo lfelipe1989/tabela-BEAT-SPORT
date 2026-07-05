@@ -199,6 +199,10 @@ export default function EtapaPage() {
   }
 
   function handleDraw() {
+    if (etapa.formato === 'dupla_eliminatoria_ate_semi' && teams.length < 8) {
+      alert('Esse formato exige pelo menos 8 duplas.');
+      return;
+    }
     if (!confirm('Confirmar sorteio? As duplas ficarão travadas para esta etapa.')) return;
 
     if (etapa.formato === 'dupla_eliminatoria_ate_semi') {
@@ -246,6 +250,8 @@ export default function EtapaPage() {
           de.finalMatch = applyResult(de.finalMatch);
         } else if (de.thirdPlaceMatch && de.thirdPlaceMatch.id === matchId) {
           de.thirdPlaceMatch = applyResult(de.thirdPlaceMatch);
+        } else if (de.semifinals && de.semifinals.some((m) => m.id === matchId)) {
+          de.semifinals = de.semifinals.map((m) => (m.id === matchId ? applyResult(m) : m));
         } else {
           de.winners = { rounds: de.winners.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
           de.losers = { ...de.losers, rounds: de.losers.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
@@ -609,10 +615,17 @@ export default function EtapaPage() {
 
       {!locked && (
         <div className="footer-actions">
-          <button className="btn btn-primary" onClick={handleDraw} disabled={participantes.length < 2}>
+          <button
+            className="btn btn-primary"
+            onClick={handleDraw}
+            disabled={participantes.length < 2 || (etapa.formato === 'dupla_eliminatoria_ate_semi' && participantes.length < 8)}
+          >
             🎲 Realizar sorteio
           </button>
         </div>
+      )}
+      {!locked && etapa.formato === 'dupla_eliminatoria_ate_semi' && participantes.length > 0 && participantes.length < 8 && (
+        <div className="warning-box">Esse formato exige pelo menos 8 duplas (hoje tem {participantes.length}). Cadastre mais duplas ou troque o formato da etapa.</div>
       )}
 
       {torneio && torneio.groups && torneio.groups.length > 0 && (
@@ -695,61 +708,78 @@ export default function EtapaPage() {
 
       {torneio && torneio.doubleElim && (
         <>
-          <h2 className="section-title">Chave principal</h2>
+          <h2 className="section-title">Chave principal (invictas)</h2>
           <div className="bracket-scroll">
             <div className="bracket">
-              {torneio.doubleElim.winners.rounds.map((round, idx) => {
-                const total = torneio.doubleElim.winners.rounds.length;
-                const isFinal = idx === total - 1;
-                return (
-                  <div className="round-col" key={'w' + idx}>
-                    <div className="round-label">{isFinal ? 'Final da chave principal (semifinal A)' : 'Rodada ' + (idx + 1)}</div>
-                    {round.map((m) => (
-                      <BracketMatchBox
-                        key={m.id}
-                        m={m}
-                        participanteNome={participanteNome}
-                        editingMatchId={editingMatchId}
-                        editingSets={editingSets}
-                        setEditingSets={setEditingSets}
-                        openEdit={openEdit}
-                        setEditingMatchId={setEditingMatchId}
-                        onSave={() => saveMatch(m.id, true)}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
+              {torneio.doubleElim.winners.rounds.map((round, idx) => (
+                <div className="round-col" key={'w' + idx}>
+                  <div className="round-label">Rodada {idx + 1}</div>
+                  {round.map((m) => (
+                    <BracketMatchBox
+                      key={m.id}
+                      m={m}
+                      participanteNome={participanteNome}
+                      editingMatchId={editingMatchId}
+                      editingSets={editingSets}
+                      setEditingSets={setEditingSets}
+                      openEdit={openEdit}
+                      setEditingMatchId={setEditingMatchId}
+                      onSave={() => saveMatch(m.id, true)}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
 
           <h2 className="section-title">Repescagem</h2>
           <div className="bracket-scroll">
             <div className="bracket">
-              {torneio.doubleElim.losers.rounds.map((round, idx) => {
-                const total = torneio.doubleElim.losers.rounds.length;
-                const isFinal = idx === total - 1 && round.length === 1;
-                return (
-                  <div className="round-col" key={'l' + idx}>
-                    <div className="round-label">{isFinal ? 'Final da repescagem (semifinal B)' : 'Rodada ' + (idx + 1)}</div>
-                    {round.map((m) => (
-                      <BracketMatchBox
-                        key={m.id}
-                        m={m}
-                        participanteNome={participanteNome}
-                        editingMatchId={editingMatchId}
-                        editingSets={editingSets}
-                        setEditingSets={setEditingSets}
-                        openEdit={openEdit}
-                        setEditingMatchId={setEditingMatchId}
-                        onSave={() => saveMatch(m.id, true)}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
+              {torneio.doubleElim.losers.rounds.map((round, idx) => (
+                <div className="round-col" key={'l' + idx}>
+                  <div className="round-label">Rodada {idx + 1}</div>
+                  {round.map((m) => (
+                    <BracketMatchBox
+                      key={m.id}
+                      m={m}
+                      participanteNome={participanteNome}
+                      editingMatchId={editingMatchId}
+                      editingSets={editingSets}
+                      setEditingSets={setEditingSets}
+                      openEdit={openEdit}
+                      setEditingMatchId={setEditingMatchId}
+                      onSave={() => saveMatch(m.id, true)}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
+
+          {torneio.doubleElim.semifinals && (
+            <>
+              <h2 className="section-title">Semifinais</h2>
+              <div className="groups-grid">
+                {torneio.doubleElim.semifinals.map((m, i) => (
+                  <div className="card" key={m.id} style={{ maxWidth: 320 }}>
+                    <h3 style={{ fontFamily: 'Anton', fontWeight: 400, fontSize: 16, margin: '0 0 10px', color: 'var(--ocean-dark)' }}>
+                      Semifinal {i + 1}
+                    </h3>
+                    <BracketMatchBox
+                      m={m}
+                      participanteNome={participanteNome}
+                      editingMatchId={editingMatchId}
+                      editingSets={editingSets}
+                      setEditingSets={setEditingSets}
+                      openEdit={openEdit}
+                      setEditingMatchId={setEditingMatchId}
+                      onSave={() => saveMatch(m.id, true)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {torneio.doubleElim.finalMatch && (
             <div className="card" style={{ maxWidth: 320 }}>
