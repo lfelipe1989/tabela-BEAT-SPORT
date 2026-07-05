@@ -183,7 +183,7 @@ function LancarResultadoPage() {
         <div className="topbar-row">
           <div className="brand">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-branco.svg" alt="BEAT Sports" className="brand-logo" />
+            <img src="/logo-branco.png" alt="BEAT Sports" className="brand-logo" />
             <span className="brand-sep">|</span>
             <h1 className="brand-title">{etapa.nome}</h1>
           </div>

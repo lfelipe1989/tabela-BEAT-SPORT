@@ -7,7 +7,7 @@ export default function Home() {
         <div className="topbar-row">
           <div className="brand">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-branco.svg" alt="BEAT Sports" className="brand-logo-home" />
+            <img src="/logo-branco.png" alt="BEAT Sports" className="brand-logo-home" />
           </div>
         </div>
       </header>
