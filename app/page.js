@@ -27,6 +27,11 @@ export default function Home() {
           <span className="hc-title">Ranking geral</span>
           <span className="hc-desc">Classificação acumulada e nivelamento por categoria</span>
         </Link>
+        <Link href="/ligas" className="home-card">
+          <span className="hc-icon">🏅</span>
+          <span className="hc-title">Ligas</span>
+          <span className="hc-desc">Circuitos com várias etapas e ranking próprio</span>
+        </Link>
       </div>
     </div>
   );

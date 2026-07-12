@@ -16,6 +16,10 @@ export async function PATCH(req, { params }) {
     if (body.formato !== undefined) update.formato = body.formato;
     if (body.data_evento !== undefined) update.data_evento = body.data_evento;
     if (body.disputa_terceiro !== undefined) update.disputa_terceiro = body.disputa_terceiro;
+    if (body.modo_ranking !== undefined) {
+      update.modo_ranking = body.modo_ranking;
+      update.liga_id = body.modo_ranking === 'liga' ? body.liga_id || null : null;
+    }
   }
   // Campos de "andamento do jogo": admin OU token de resultado podem mexer.
   if (body.status) update.status = body.status;

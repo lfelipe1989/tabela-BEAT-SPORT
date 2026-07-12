@@ -11,19 +11,14 @@ export async function POST(req) {
   }
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
-    .from('etapas')
+    .from('ligas')
     .insert({
       nome: body.nome.trim(),
-      modalidade: body.modalidade || 'volei',
-      formato: body.formato || 'grupos_eliminatoria',
-      data_evento: body.data_evento || null,
-      disputa_terceiro: !!body.disputa_terceiro,
-      modo_ranking: body.modo_ranking || 'geral',
-      liga_id: body.modo_ranking === 'liga' ? body.liga_id || null : null,
+      data_inicio: body.data_inicio || null,
+      data_fim: body.data_fim || null,
     })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await supabaseAdmin.from('etapa_tokens').insert({ etapa_id: data.id });
-  return NextResponse.json({ etapa: data });
+  return NextResponse.json({ liga: data });
 }

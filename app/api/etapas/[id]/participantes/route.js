@@ -24,6 +24,28 @@ export async function POST(req, { params }) {
   return NextResponse.json({ participante: data });
 }
 
+export async function PATCH(req, { params }) {
+  if (!isValidAdminPassword(req)) {
+    return NextResponse.json({ error: 'Senha inválida' }, { status: 401 });
+  }
+  const body = await req.json();
+  if (!body.participante_id) {
+    return NextResponse.json({ error: 'participante_id é obrigatório' }, { status: 400 });
+  }
+  const supabaseAdmin = getSupabaseAdmin();
+  const update = {};
+  if (body.atleta1_id !== undefined) update.atleta1_id = body.atleta1_id;
+  if (body.atleta2_id !== undefined) update.atleta2_id = body.atleta2_id || null;
+  if (body.cabeca_de_chave !== undefined) update.cabeca_de_chave = !!body.cabeca_de_chave;
+  const { error } = await supabaseAdmin
+    .from('etapa_participantes')
+    .update(update)
+    .eq('id', body.participante_id)
+    .eq('etapa_id', params.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req, { params }) {
   if (!isValidAdminPassword(req)) {
     return NextResponse.json({ error: 'Senha inválida' }, { status: 401 });

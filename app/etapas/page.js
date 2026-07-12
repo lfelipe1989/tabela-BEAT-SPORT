@@ -16,8 +16,17 @@ const STATUS_LABEL = { planejada: 'Planejada', em_andamento: 'Em andamento', fin
 
 export default function EtapasPage() {
   const [etapas, setEtapas] = useState([]);
+  const [ligas, setLigas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '', disputa_terceiro: false });
+  const [form, setForm] = useState({
+    nome: '',
+    modalidade: 'volei',
+    formato: 'grupos_eliminatoria',
+    data_evento: '',
+    disputa_terceiro: false,
+    modo_ranking: 'geral',
+    liga_id: '',
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,6 +34,8 @@ export default function EtapasPage() {
     setLoading(true);
     const { data } = await supabase.from('etapas').select('*').order('data_evento', { ascending: false });
     setEtapas(data || []);
+    const { data: lg } = await supabase.from('ligas').select('*').order('nome');
+    setLigas(lg || []);
     setLoading(false);
   }
 
@@ -45,7 +56,15 @@ export default function EtapasPage() {
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Erro ao salvar');
-      setForm({ nome: '', modalidade: 'volei', formato: 'grupos_eliminatoria', data_evento: '', disputa_terceiro: false });
+      setForm({
+        nome: '',
+        modalidade: 'volei',
+        formato: 'grupos_eliminatoria',
+        data_evento: '',
+        disputa_terceiro: false,
+        modo_ranking: 'geral',
+        liga_id: '',
+      });
       await load();
     } catch (err) {
       setError(err.message);
@@ -121,6 +140,28 @@ export default function EtapasPage() {
             Disputar 3º/4º lugar em jogo real (senão, os dois semifinalistas ficam empatados em 3º)
           </label>
         )}
+
+        <div className="field" style={{ marginTop: 14 }}>
+          <label className="field-label">Contabilização no ranking</label>
+          <select value={form.modo_ranking} onChange={(e) => setForm({ ...form, modo_ranking: e.target.value })}>
+            <option value="geral">Contar pro ranking geral</option>
+            <option value="liga">Contar só pra uma liga específica</option>
+            <option value="nenhum">Não contar pra nenhum ranking</option>
+          </select>
+        </div>
+        {form.modo_ranking === 'liga' && (
+          <div className="field">
+            <label className="field-label">Qual liga?</label>
+            <select value={form.liga_id} onChange={(e) => setForm({ ...form, liga_id: e.target.value })} required>
+              <option value="">Selecione...</option>
+              {ligas.map((l) => (
+                <option key={l.id} value={l.id}>{l.nome}</option>
+              ))}
+            </select>
+            {ligas.length === 0 && <div className="warning-box" style={{ marginTop: 8 }}>Nenhuma liga criada ainda. Crie uma em "Ligas" primeiro.</div>}
+          </div>
+        )}
+
         {error && <div className="warning-box">{error}</div>}
       </div>
 

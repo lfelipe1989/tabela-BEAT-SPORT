@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '../../lib/supabaseClient';
+import { getAdminPassword } from '../../lib/adminClient';
 import { categoriaPorPontos } from '../../lib/ranking';
 import PageHeader from '../../components/PageHeader';
 
@@ -9,21 +10,46 @@ export default function RankingPage() {
   const [ranking, setRanking] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    const { data: r } = await supabase.from('ranking_geral').select('*').order('pontos_totais', { ascending: false });
+    const { data: cats } = await supabase.from('categorias').select('*').order('ordem');
+    setRanking(r || []);
+    setCategorias(cats || []);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    async function load() {
-      const { data: r } = await supabase.from('ranking_geral').select('*').order('pontos_totais', { ascending: false });
-      const { data: cats } = await supabase.from('categorias').select('*').order('ordem');
-      setRanking(r || []);
-      setCategorias(cats || []);
-      setLoading(false);
-    }
     load();
   }, []);
+
+  async function handleReset() {
+    if (!confirm('Zerar o ranking geral? Isso não apaga o histórico de nenhuma etapa — só faz as etapas que hoje contam pro geral pararem de contar. Continuar?')) return;
+    setBusy(true);
+    const password = getAdminPassword();
+    const res = await fetch('/api/ranking/reset', {
+      method: 'POST',
+      headers: { 'x-admin-password': password },
+    });
+    setBusy(false);
+    if (res.ok) {
+      alert('Ranking geral zerado. As etapas antigas continuam salvas, só não contam mais pro geral (você pode reativar cada uma individualmente na própria etapa, se quiser).');
+      load();
+    } else {
+      alert((await res.json()).error || 'Erro ao zerar ranking');
+    }
+  }
 
   return (
     <div className="page">
       <PageHeader title="Ranking geral" icon="🏆" />
+
+      <div className="footer-actions" style={{ marginBottom: 14 }}>
+        <button className="btn btn-ghost btn-sm" onClick={handleReset} disabled={busy}>
+          🔄 Zerar ranking geral
+        </button>
+      </div>
 
       {loading ? (
         <div className="empty-hint">Carregando...</div>

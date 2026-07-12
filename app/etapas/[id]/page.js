@@ -49,6 +49,9 @@ export default function EtapaPage() {
   const [etapaForm, setEtapaForm] = useState(null);
   const [shareToken, setShareToken] = useState(null);
   const [loadingToken, setLoadingToken] = useState(false);
+  const [ligas, setLigas] = useState([]);
+  const [editingParticipanteId, setEditingParticipanteId] = useState(null);
+  const [participanteEditForm, setParticipanteEditForm] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,6 +60,8 @@ export default function EtapaPage() {
     setEtapaForm(e);
     const { data: parts } = await supabase.from('etapa_participantes').select('*').eq('etapa_id', id);
     setParticipantes(parts || []);
+    const { data: lg } = await supabase.from('ligas').select('*').order('nome');
+    setLigas(lg || []);
     const { data: al } = await supabase.from('atletas').select('*').order('nome');
     setAtletas(al || []);
 
@@ -128,6 +133,27 @@ export default function EtapaPage() {
     if (res.ok) load();
   }
 
+  function openEditParticipante(p) {
+    setEditingParticipanteId(p.id);
+    setParticipanteEditForm({ atleta1_id: p.atleta1_id, atleta2_id: p.atleta2_id || '', cabeca_de_chave: p.cabeca_de_chave });
+  }
+
+  async function handleSaveParticipante(e) {
+    e.preventDefault();
+    const password = getAdminPassword();
+    const res = await fetch(`/api/etapas/${id}/participantes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ participante_id: editingParticipanteId, ...participanteEditForm }),
+    });
+    if (res.ok) {
+      setEditingParticipanteId(null);
+      load();
+    } else {
+      alert((await res.json()).error || 'Erro ao salvar dupla');
+    }
+  }
+
   async function handleSaveEtapa(e) {
     e.preventDefault();
     const password = getAdminPassword();
@@ -140,6 +166,8 @@ export default function EtapaPage() {
         formato: etapaForm.formato,
         data_evento: etapaForm.data_evento,
         disputa_terceiro: etapaForm.disputa_terceiro,
+        modo_ranking: etapaForm.modo_ranking,
+        liga_id: etapaForm.liga_id,
       }),
     });
     if (res.ok) {
@@ -417,6 +445,14 @@ export default function EtapaPage() {
                 <div>{etapa.disputa_terceiro ? 'Habilitada (jogo real)' : 'Desabilitada (empatados em 3º)'}</div>
               </div>
             </div>
+            <div style={{ marginTop: 10 }}>
+              <span className="field-label">Contabilização no ranking</span>
+              <div>
+                {etapa.modo_ranking === 'geral' && 'Ranking geral'}
+                {etapa.modo_ranking === 'liga' && `Liga: ${(ligas.find((l) => l.id === etapa.liga_id) || {}).nome || '—'}`}
+                {etapa.modo_ranking === 'nenhum' && 'Não contabiliza'}
+              </div>
+            </div>
             <div className="footer-actions">
               <button className="btn btn-ghost btn-sm" onClick={() => { setEtapaForm(etapa); setEditingEtapa(true); }}>
                 ✏️ Editar etapa
@@ -465,6 +501,27 @@ export default function EtapaPage() {
                 Disputar 3º/4º lugar em jogo real{locked ? ' (travado após sorteio)' : ' (senão, os dois semifinalistas ficam empatados em 3º)'}
               </label>
             )}
+            <div className="grid2">
+              <div className="field">
+                <label className="field-label">Contabilização no ranking</label>
+                <select value={etapaForm.modo_ranking || 'geral'} onChange={(e) => setEtapaForm({ ...etapaForm, modo_ranking: e.target.value })}>
+                  <option value="geral">Contar pro ranking geral</option>
+                  <option value="liga">Contar só pra uma liga específica</option>
+                  <option value="nenhum">Não contar pra nenhum ranking</option>
+                </select>
+              </div>
+              {etapaForm.modo_ranking === 'liga' && (
+                <div className="field">
+                  <label className="field-label">Qual liga?</label>
+                  <select value={etapaForm.liga_id || ''} onChange={(e) => setEtapaForm({ ...etapaForm, liga_id: e.target.value })}>
+                    <option value="">Selecione...</option>
+                    {ligas.map((l) => (
+                      <option key={l.id} value={l.id}>{l.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
             <div className="footer-actions">
               <button className="btn btn-primary" type="submit">Salvar</button>
               <button className="btn btn-ghost" type="button" onClick={() => setEditingEtapa(false)}>Cancelar</button>
@@ -541,20 +598,56 @@ export default function EtapaPage() {
         </div>
       )}
 
-      {!locked && (
-        <div className="card">
-          <h2 className="section-title">Duplas / participantes ({participantes.length})</h2>
-          <div className="teams-list">
-            {participantes.map((p) => (
+      <div className="card">
+        <h2 className="section-title">Duplas / participantes ({participantes.length})</h2>
+        <div className="teams-list">
+          {participantes.map((p) =>
+            editingParticipanteId === p.id ? (
+              <form key={p.id} onSubmit={handleSaveParticipante} className="add-team-form" style={{ background: 'var(--n-cream)', padding: 10, borderRadius: 10 }}>
+                <select
+                  value={participanteEditForm.atleta1_id}
+                  onChange={(e) => setParticipanteEditForm({ ...participanteEditForm, atleta1_id: e.target.value })}
+                  required
+                >
+                  <option value="">Atleta 1</option>
+                  {atletas.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nome}</option>
+                  ))}
+                </select>
+                <select
+                  value={participanteEditForm.atleta2_id}
+                  onChange={(e) => setParticipanteEditForm({ ...participanteEditForm, atleta2_id: e.target.value })}
+                >
+                  <option value="">Atleta 2 (opcional)</option>
+                  {atletas.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nome}</option>
+                  ))}
+                </select>
+                <button className="btn btn-ocean btn-sm" type="submit">Salvar</button>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={() => setEditingParticipanteId(null)}>Cancelar</button>
+              </form>
+            ) : (
               <div key={p.id} className="team-row">
                 {p.cabeca_de_chave && <span className="seed-tag">Cabeça de chave</span>}
                 <span className="tname">{participanteNome(p.id)}</span>
-                <button className="icon-btn" onClick={() => handleRemoveParticipante(p.id)}>
-                  ✕
+                <button className="icon-btn" onClick={() => openEditParticipante(p)} title="Editar dupla (troca atleta)">
+                  ✏️
                 </button>
+                {!locked && (
+                  <button className="icon-btn" onClick={() => handleRemoveParticipante(p.id)} title="Remover">
+                    ✕
+                  </button>
+                )}
               </div>
-            ))}
+            )
+          )}
+        </div>
+        {locked && (
+          <div className="warning-box" style={{ marginTop: 10 }}>
+            O sorteio já foi feito. Você ainda pode trocar qual atleta compõe uma dupla (✏️), mas não dá mais pra adicionar ou remover duplas sem refazer o sorteio.
           </div>
+        )}
+        {!locked && (
           <form onSubmit={handleAddParticipante} className="add-team-form">
             <select value={pForm.atleta1_id} onChange={(e) => setPForm({ ...pForm, atleta1_id: e.target.value })} required>
               <option value="">Atleta 1</option>
@@ -584,8 +677,8 @@ export default function EtapaPage() {
               + Adicionar dupla
             </button>
           </form>
-        </div>
-      )}
+        )}
+      </div>
 
       {!locked && etapa.formato !== 'eliminatoria_simples' && etapa.formato !== 'dupla_eliminatoria_ate_semi' && (
         <div className="card">
