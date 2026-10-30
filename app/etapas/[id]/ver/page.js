@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../../lib/supabaseClient';
-import { computeStandings, computeSetsResult, roundLabel, isByeId } from '../../../../lib/bracketEngine';
+import { computeStandings, computeSetsResult, roundLabel, isByeId, normalizeTorneio } from '../../../../lib/bracketEngine';
 
 const TIEBREAK = ['confronto_direto', 'vitorias', 'saldo_sets', 'saldo_pontos', 'sets_pro', 'pontos_pro'];
 const FORMATOS = {
@@ -29,7 +29,7 @@ export default function VerEtapaPage() {
     setParticipantes(parts || []);
     const { data: al } = await supabase.from('atletas').select('*').order('nome');
     setAtletas(al || []);
-    if (e && e.estado_chaveamento) setTorneio(e.estado_chaveamento);
+    if (e && e.estado_chaveamento) setTorneio(normalizeTorneio(e.estado_chaveamento, e.disputa_terceiro));
     if (e && e.status === 'finalizada') {
       const { data: res } = await supabase.from('etapa_resultados').select('*').eq('etapa_id', id).order('colocacao');
       setFinalResults(res || []);

@@ -18,6 +18,7 @@ import {
   placementsFromDoubleElim,
   thirdPlacePendingDoubleElim,
   listByeSlots,
+  normalizeTorneio,
   teamIdsInDraw,
   placeTeamOnBye,
   isByeId,
@@ -70,7 +71,7 @@ export default function EtapaPage() {
     setAtletas(al || []);
 
     if (e && e.estado_chaveamento) {
-      setTorneio(e.estado_chaveamento);
+      setTorneio(normalizeTorneio(e.estado_chaveamento, e.disputa_terceiro));
     }
     if (e && e.status === 'finalizada') {
       const { data: res } = await supabase.from('etapa_resultados').select('*').eq('etapa_id', id).order('colocacao');

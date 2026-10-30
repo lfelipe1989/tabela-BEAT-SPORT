@@ -15,6 +15,7 @@ import {
   placementsFromDoubleElim,
   thirdPlacePendingDoubleElim,
   isByeId,
+  normalizeTorneio,
 } from '../../../../lib/bracketEngine';
 import { pontosPorColocacao } from '../../../../lib/ranking';
 
@@ -50,7 +51,7 @@ function LancarResultadoPage() {
     setParticipantes(parts || []);
     const { data: al } = await supabase.from('atletas').select('*').order('nome');
     setAtletas(al || []);
-    if (e && e.estado_chaveamento) setTorneio(e.estado_chaveamento);
+    if (e && e.estado_chaveamento) setTorneio(normalizeTorneio(e.estado_chaveamento, e.disputa_terceiro));
     if (e && e.status === 'finalizada') {
       const { data: res } = await supabase.from('etapa_resultados').select('*').eq('etapa_id', id).order('colocacao');
       setFinalResults(res || []);
