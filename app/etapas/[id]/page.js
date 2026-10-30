@@ -17,6 +17,9 @@ import {
   advanceDoubleElim,
   placementsFromDoubleElim,
   thirdPlacePendingDoubleElim,
+  listByeSlots,
+  teamIdsInDraw,
+  placeTeamOnBye,
   isByeId,
 } from '../../../lib/bracketEngine';
 import { pontosPorColocacao } from '../../../lib/ranking';
@@ -52,6 +55,7 @@ export default function EtapaPage() {
   const [ligas, setLigas] = useState([]);
   const [editingParticipanteId, setEditingParticipanteId] = useState(null);
   const [participanteEditForm, setParticipanteEditForm] = useState(null);
+  const [byeChoice, setByeChoice] = useState({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,6 +156,22 @@ export default function EtapaPage() {
     } else {
       alert((await res.json()).error || 'Erro ao salvar dupla');
     }
+  }
+
+  function handleColocarNoBye(slot) {
+    const pid = byeChoice[slot.byeId];
+    if (!pid) {
+      alert('Escolha a dupla que vai ocupar o lugar do BYE.');
+      return;
+    }
+    const msg = slot.hasResult
+      ? 'Esse jogo já tem resultado. Ao colocar a dupla, o resultado dele e dos jogos seguintes que dependem dele serão zerados. Continuar?'
+      : 'Colocar esta dupla no lugar do BYE?';
+    if (!confirm(msg)) return;
+    const next = placeTeamOnBye(torneio, slot.byeId, pid, etapa.disputa_terceiro);
+    setTorneio(next);
+    saveEstado(next, 'em_andamento');
+    setByeChoice({ ...byeChoice, [slot.byeId]: '' });
   }
 
   async function handleSaveEtapa(e) {
@@ -633,7 +653,7 @@ export default function EtapaPage() {
                 <button className="icon-btn" onClick={() => openEditParticipante(p)} title="Editar dupla (troca atleta)">
                   ✏️
                 </button>
-                {!locked && (
+                {(!locked || (torneio && !teamIdsInDraw(torneio).has(p.id) && etapa.status !== 'finalizada')) && (
                   <button className="icon-btn" onClick={() => handleRemoveParticipante(p.id)} title="Remover">
                     ✕
                   </button>
@@ -644,10 +664,10 @@ export default function EtapaPage() {
         </div>
         {locked && (
           <div className="warning-box" style={{ marginTop: 10 }}>
-            O sorteio já foi feito. Você ainda pode trocar qual atleta compõe uma dupla (✏️), mas não dá mais pra adicionar ou remover duplas sem refazer o sorteio.
+            O torneio já começou. Você pode trocar os atletas de uma dupla (✏️) a qualquer momento — a troca vale em todos os jogos. Também pode adicionar uma dupla nova (fora da chave) e, nos formatos eliminatórios, colocá-la no lugar de um BYE (veja o quadro “BYEs da chave” abaixo).
           </div>
         )}
-        {!locked && (
+        {(
           <form onSubmit={handleAddParticipante} className="add-team-form">
             <select value={pForm.atleta1_id} onChange={(e) => setPForm({ ...pForm, atleta1_id: e.target.value })} required>
               <option value="">Atleta 1</option>
@@ -679,6 +699,45 @@ export default function EtapaPage() {
           </form>
         )}
       </div>
+
+      {locked && torneio && listByeSlots(torneio).length > 0 && (
+        <div className="card">
+          <h2 className="section-title">BYEs da chave</h2>
+          {etapa.status === 'finalizada' ? (
+            <div className="empty-hint">Reabra a etapa para trocar um BYE por uma dupla.</div>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 10px', fontSize: 14 }}>
+                Chegou uma dupla depois do sorteio? Cadastre ela em “+ Adicionar dupla” e escolha aqui qual BYE ela ocupa.
+              </p>
+              {(() => {
+                const inDraw = teamIdsInDraw(torneio);
+                const livres = participantes.filter((p) => !inDraw.has(p.id));
+                return listByeSlots(torneio).map((slot) => (
+                  <div key={slot.byeId} className="add-team-form" style={{ alignItems: 'center' }}>
+                    <span className="tname">
+                      BYE contra {slot.opponentId && !isByeId(slot.opponentId) ? participanteNome(slot.opponentId) : '—'}
+                      {slot.hasResult ? ' (jogo já lançado)' : ''}
+                    </span>
+                    <select
+                      value={byeChoice[slot.byeId] || ''}
+                      onChange={(e) => setByeChoice({ ...byeChoice, [slot.byeId]: e.target.value })}
+                    >
+                      <option value="">{livres.length ? 'Escolha a dupla' : 'Nenhuma dupla livre — adicione uma'}</option>
+                      {livres.map((p) => (
+                        <option key={p.id} value={p.id}>{participanteNome(p.id)}</option>
+                      ))}
+                    </select>
+                    <button className="btn btn-ocean btn-sm" type="button" onClick={() => handleColocarNoBye(slot)}>
+                      Colocar no BYE
+                    </button>
+                  </div>
+                ));
+              })()}
+            </>
+          )}
+        </div>
+      )}
 
       {!locked && etapa.formato !== 'eliminatoria_simples' && etapa.formato !== 'dupla_eliminatoria_ate_semi' && (
         <div className="card">
