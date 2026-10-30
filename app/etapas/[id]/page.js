@@ -165,8 +165,8 @@ export default function EtapaPage() {
       return;
     }
     const msg = slot.hasResult
-      ? 'Esse jogo já tem resultado. Ao colocar a dupla, o resultado dele e dos jogos seguintes que dependem dele serão zerados. Continuar?'
-      : 'Colocar esta dupla no lugar do BYE?';
+      ? 'Esse jogo já tem resultado lançado. Ao colocar a dupla, ele volta a ser disputado e os jogos seguintes que dependiam dele serão zerados. Continuar?'
+      : 'Colocar esta dupla no lugar do BYE? O jogo volta a ser disputado; se a dupla que avançou já jogou a fase seguinte, esse resultado será zerado.';
     if (!confirm(msg)) return;
     const next = placeTeamOnBye(torneio, slot.byeId, pid, etapa.disputa_terceiro);
     setTorneio(next);
@@ -717,7 +717,7 @@ export default function EtapaPage() {
                   <div key={slot.byeId} className="add-team-form" style={{ alignItems: 'center' }}>
                     <span className="tname">
                       BYE contra {slot.opponentId && !isByeId(slot.opponentId) ? participanteNome(slot.opponentId) : '—'}
-                      {slot.hasResult ? ' (jogo já lançado)' : ''}
+                      {slot.hasResult ? ' (resultado lançado manualmente)' : ''}
                     </span>
                     <select
                       value={byeChoice[slot.byeId] || ''}
