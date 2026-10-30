@@ -9,6 +9,7 @@ const FORMATOS = {
   grupos_eliminatoria: 'Grupos + eliminatórias',
   eliminatoria_simples: 'Eliminatória simples',
   grupos_apenas: 'Somente grupos',
+  dupla_eliminatoria_ate_semi: 'Dupla eliminação até a semifinal',
 };
 const MODALIDADES = { volei: '🏐 Vôlei de praia', futevolei: '⚽ Futevôlei', beach_tenis: '🎾 Beach tênis' };
 
@@ -74,7 +75,18 @@ export default function VerEtapaPage() {
         bracketPend.push(torneio.bracket.thirdPlaceMatch);
       }
     }
-    proximos = [...groupPend, ...bracketPend];
+    let dePend = [];
+    const de = torneio.doubleElim;
+    if (de) {
+      const all = [];
+      (de.winners ? de.winners.rounds : []).forEach((r) => r.forEach((m) => all.push(m)));
+      (de.losers ? de.losers.rounds : []).forEach((r) => r.forEach((m) => all.push(m)));
+      (de.semifinals || []).forEach((m) => all.push(m));
+      if (de.finalMatch) all.push(de.finalMatch);
+      if (de.thirdPlaceMatch) all.push(de.thirdPlaceMatch);
+      dePend = all.filter((m) => m.teamA && m.teamB && !m.winner && !isByeId(m.teamA) && !isByeId(m.teamB));
+    }
+    proximos = [...groupPend, ...bracketPend, ...dePend];
   }
 
   return (
@@ -126,7 +138,19 @@ export default function VerEtapaPage() {
       )}
 
       {!torneio && (
-        <div className="empty-hint">O sorteio desta etapa ainda não foi realizado.</div>
+        <>
+          <div className="empty-hint">O sorteio desta etapa ainda não foi realizado.</div>
+          {participantes.length > 0 && (
+            <div className="card">
+              <h2 className="section-title">Duplas inscritas ({participantes.length})</h2>
+              {participantes.map((p, i) => (
+                <div className="match-row" key={p.id}>
+                  <div className="match-teams">{i + 1}. {participanteNome(p.id)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {proximos.length > 0 && (
@@ -250,6 +274,80 @@ export default function VerEtapaPage() {
           )}
         </>
       )}
+      {torneio && torneio.doubleElim && (
+        <>
+          <h2 className="section-title">Chave principal (invictas)</h2>
+          <div className="bracket-scroll">
+            <div className="bracket">
+              {torneio.doubleElim.winners.rounds.map((round, idx) => (
+                <div className="round-col" key={'w' + idx}>
+                  <div className="round-label">Rodada {idx + 1}</div>
+                  {round.map((m) => <ReadMatchBox key={m.id} m={m} participanteNome={participanteNome} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <h2 className="section-title">Repescagem</h2>
+          <div className="bracket-scroll">
+            <div className="bracket">
+              {torneio.doubleElim.losers.rounds.map((round, idx) => (
+                <div className="round-col" key={'l' + idx}>
+                  <div className="round-label">Rodada {idx + 1}</div>
+                  {round.map((m) => <ReadMatchBox key={m.id} m={m} participanteNome={participanteNome} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+          {torneio.doubleElim.semifinals && (
+            <>
+              <h2 className="section-title">Semifinais</h2>
+              <div className="groups-grid">
+                {torneio.doubleElim.semifinals.map((m, i) => (
+                  <div className="card" key={m.id} style={{ maxWidth: 320 }}>
+                    <h3 style={H3}>Semifinal {i + 1}</h3>
+                    <ReadMatchBox m={m} participanteNome={participanteNome} />
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {torneio.doubleElim.finalMatch && (
+            <div className="card" style={{ maxWidth: 320 }}>
+              <h3 style={H3}>🏁 Final</h3>
+              <ReadMatchBox m={torneio.doubleElim.finalMatch} participanteNome={participanteNome} />
+            </div>
+          )}
+          {torneio.doubleElim.thirdPlaceMatch && (
+            <div className="card" style={{ maxWidth: 320 }}>
+              <h3 style={H3}>🥉 Disputa de 3º lugar</h3>
+              <ReadMatchBox m={torneio.doubleElim.thirdPlaceMatch} participanteNome={participanteNome} />
+            </div>
+          )}
+          {torneio.doubleElim.champion && (
+            <div className="champion-box">
+              <div className="trophy">🏆</div>
+              <div className="clabel">Campeão da etapa</div>
+              <div className="cname">{participanteNome(torneio.doubleElim.champion)}</div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+const H3 = { fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase', fontSize: 16, margin: '0 0 10px', color: 'var(--accent)' };
+
+function ReadMatchBox({ m, participanteNome }) {
+  return (
+    <div className="match-box">
+      <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
+        {m.teamA ? participanteNome(m.teamA) : '—'}
+      </div>
+      <div className="vs-div"></div>
+      <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
+        {m.teamB ? participanteNome(m.teamB) : '—'}
+      </div>
     </div>
   );
 }
