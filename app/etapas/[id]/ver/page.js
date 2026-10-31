@@ -4,6 +4,8 @@ import { useParams } from 'next/navigation';
 import { supabase } from '../../../../lib/supabaseClient';
 import { computeStandings, computeSetsResult, roundLabel, isByeId, normalizeTorneio, bestNextPlaced } from '../../../../lib/bracketEngine';
 
+import { buildMatchGraph } from '../../../../lib/bracketEngine';
+import { GraphContext, JogoTag, SlotName, FwdLine } from '../../../../components/MatchMeta';
 const TIEBREAK = ['confronto_direto', 'vitorias', 'saldo_sets', 'saldo_pontos', 'sets_pro', 'pontos_pro'];
 const FORMATOS = {
   grupos_eliminatoria: 'Grupos + eliminatórias',
@@ -94,7 +96,44 @@ export default function VerEtapaPage() {
     proximos = [...groupPend, ...bracketPend, ...dePend];
   }
 
+  const graph = buildMatchGraph(torneio, etapa.disputa_terceiro);
+
+  // jogos que ainda dependem de outros resultados (existentes com vaga em aberto + os que ainda nem foram criados)
+  const aDefinir = [];
+  if (torneio) {
+    const todos = [];
+    (torneio.groupMatches || []).forEach((m) => todos.push(m));
+    if (torneio.bracket) {
+      torneio.bracket.rounds.forEach((r) => r.forEach((m) => todos.push(m)));
+      if (torneio.bracket.thirdPlaceMatch) todos.push(torneio.bracket.thirdPlaceMatch);
+    }
+    const de2 = torneio.doubleElim;
+    if (de2) {
+      de2.winners.rounds.forEach((r) => r.forEach((m) => todos.push(m)));
+      de2.losers.rounds.forEach((r) => r.forEach((m) => todos.push(m)));
+      (de2.semifinals || []).forEach((m) => todos.push(m));
+      if (de2.finalMatch) todos.push(de2.finalMatch);
+      if (de2.thirdPlaceMatch) todos.push(de2.thirdPlaceMatch);
+    }
+    todos.forEach((m) => {
+      if ((!m.teamA || !m.teamB) && !m.winner && graph.num[m.id] && graph.src[m.id]) {
+        aDefinir.push({
+          key: m.id,
+          num: graph.num[m.id],
+          nomeA: m.teamA ? participanteNome(m.teamA) : null,
+          nomeB: m.teamB ? participanteNome(m.teamB) : null,
+          a: graph.src[m.id].a,
+          b: graph.src[m.id].b,
+          fwd: graph.fwd[m.id],
+        });
+      }
+    });
+    (graph.pending || []).forEach((it) => aDefinir.push({ key: it.key, num: it.num, a: it.a, b: it.b, fwd: it.fwd }));
+    aDefinir.sort((x, y) => x.num - y.num);
+  }
+
   return (
+    <GraphContext.Provider value={graph}>
     <div className="page">
       <header className="topbar">
         <div className="topbar-row">
@@ -162,18 +201,44 @@ export default function VerEtapaPage() {
         <>
           <h2 className="section-title">▶️ Próximos confrontos</h2>
           <div className="card">
-            {proximos.map((m) => (
+            {[...proximos].sort((x, y) => (graph.num[x.id] || 999) - (graph.num[y.id] || 999)).map((m) => (
               <div className="match-row" key={m.id}>
+                <JogoTag m={m} />
                 <div className="match-top">
                   <div className="match-teams">
                     {participanteNome(m.teamA)} <span style={{ color: '#aaa' }}>vs</span> {participanteNome(m.teamB)}
                   </div>
                   <div className="match-status status-pending">Pendente</div>
                 </div>
+                <FwdLine m={m} />
               </div>
             ))}
           </div>
         </>
+      )}
+
+      {aDefinir.length > 0 && (
+        <details className="card" style={{ marginBottom: 12 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 800 }}>🔎 Jogos a definir ({aDefinir.length}) — de onde vem cada dupla</summary>
+          <div style={{ marginTop: 10 }}>
+            {aDefinir.map((it) => (
+              <div className="match-row" key={it.key}>
+                <div className="jogo-tag">Jogo {it.num}</div>
+                <div className="match-teams">
+                  {it.nomeA ? it.nomeA : <span className="slot-src">{it.a}</span>} <span style={{ color: '#aaa' }}>vs</span>{' '}
+                  {it.nomeB ? it.nomeB : <span className="slot-src">{it.b}</span>}
+                </div>
+                {it.fwd && (it.fwd.win || it.fwd.lose) && (
+                  <div className="fwd-line">
+                    {it.fwd.win && <span>Vencedor → {it.fwd.win}</span>}
+                    {it.fwd.win && it.fwd.lose && ' · '}
+                    {it.fwd.lose && <span>Perdedor → {it.fwd.lose}</span>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
       )}
 
       {torneio && torneio.groups && torneio.groups.length > 0 && (
@@ -213,6 +278,7 @@ export default function VerEtapaPage() {
                       const r = computeSetsResult(m.sets);
                       return (
                         <div className="match-row" key={m.id}>
+                          <JogoTag m={m} />
                           <div className="match-top">
                             <div className="match-teams">
                               {participanteNome(m.teamA)} <span style={{ color: '#aaa' }}>vs</span> {participanteNome(m.teamB)}
@@ -241,13 +307,15 @@ export default function VerEtapaPage() {
                   <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
                   {round.map((m) => (
                     <div className="match-box" key={m.id}>
+                      <JogoTag m={m} />
                       <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
-                        {m.teamA ? participanteNome(m.teamA) : '—'}
+                        <SlotName m={m} side="a" name={m.teamA ? participanteNome(m.teamA) : null} />
                       </div>
                       <div className="vs-div"></div>
                       <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
-                        {m.teamB ? participanteNome(m.teamB) : '—'}
+                        <SlotName m={m} side="b" name={m.teamB ? participanteNome(m.teamB) : null} />
                       </div>
+                      <FwdLine m={m} />
                     </div>
                   ))}
                 </div>
@@ -260,6 +328,7 @@ export default function VerEtapaPage() {
                 🥉 Disputa de 3º lugar
               </h3>
               <div className="match-box">
+                <JogoTag m={torneio.bracket.thirdPlaceMatch} />
                 <div className={`side ${torneio.bracket.thirdPlaceMatch.winner === torneio.bracket.thirdPlaceMatch.teamA ? 'winner' : ''}`}>
                   {participanteNome(torneio.bracket.thirdPlaceMatch.teamA)}
                 </div>
@@ -338,6 +407,7 @@ export default function VerEtapaPage() {
         </>
       )}
     </div>
+    </GraphContext.Provider>
   );
 }
 
@@ -346,13 +416,15 @@ const H3 = { fontFamily: 'Oswald', fontWeight: 700, fontStyle: 'italic', textTra
 function ReadMatchBox({ m, participanteNome }) {
   return (
     <div className="match-box">
+      <JogoTag m={m} />
       <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
-        {m.teamA ? participanteNome(m.teamA) : '—'}
+        <SlotName m={m} side="a" name={m.teamA ? participanteNome(m.teamA) : null} />
       </div>
       <div className="vs-div"></div>
       <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
-        {m.teamB ? participanteNome(m.teamB) : '—'}
+        <SlotName m={m} side="b" name={m.teamB ? participanteNome(m.teamB) : null} />
       </div>
+      <FwdLine m={m} />
     </div>
   );
 }

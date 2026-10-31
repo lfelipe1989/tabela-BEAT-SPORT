@@ -208,3 +208,8 @@ table.standings tr.qualified td:first-child::before{ content:"✓ "; color: var(
 .etapa-pulse-verde{ background:#d6f5d6; color:#1d6b2a; }
 .etapa-pulse-amarelo{ background:#fff1b8; color:#8a6a00; }
 .etapa-pulse-vermelho{ background:#ffd9d6; color:#a3281b; }
+
+/* Numeração dos jogos e origem/destino das duplas */
+.jogo-tag{ font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.slot-src{ color:#8a8a8a; font-style:italic; font-size:12px; }
+.fwd-line{ font-size:11px; color:#777; margin-top:6px; border-top:1px dashed var(--line); padding-top:4px; }

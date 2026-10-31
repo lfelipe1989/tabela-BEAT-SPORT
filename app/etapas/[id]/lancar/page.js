@@ -19,6 +19,8 @@ import {
   normalizeTorneio,
   findMatch,
 } from '../../../../lib/bracketEngine';
+import { buildMatchGraph } from '../../../../lib/bracketEngine';
+import { GraphContext, JogoTag, SlotName, FwdLine } from '../../../../components/MatchMeta';
 import { pontosPorColocacao } from '../../../../lib/ranking';
 
 const TIEBREAK = ['confronto_direto', 'vitorias', 'saldo_sets', 'saldo_pontos', 'sets_pro', 'pontos_pro'];
@@ -232,7 +234,10 @@ function LancarResultadoPage() {
   if (!etapa) return <div className="page"><div className="empty-hint">Etapa não encontrada.</div></div>;
   if (!token) return <div className="page"><div className="empty-hint">Link inválido: falta o código de acesso.</div></div>;
 
+  const graph = buildMatchGraph(torneio, etapa.disputa_terceiro);
+
   return (
+    <GraphContext.Provider value={graph}>
     <div className="page">
       <header className="topbar">
         <div className="topbar-row">
@@ -372,13 +377,15 @@ function LancarResultadoPage() {
                   <div className="round-label">{roundLabel(Math.log2(torneio.bracket.rounds[0].length * 2), idx)}</div>
                   {round.map((m) => (
                     <div className="match-box" key={m.id}>
+                      <JogoTag m={m} />
                       <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
-                        {m.teamA ? participanteNome(m.teamA) : '—'}
+                        <SlotName m={m} side="a" name={m.teamA ? participanteNome(m.teamA) : null} />
                       </div>
                       <div className="vs-div"></div>
                       <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
-                        {m.teamB ? participanteNome(m.teamB) : '—'}
+                        <SlotName m={m} side="b" name={m.teamB ? participanteNome(m.teamB) : null} />
                       </div>
+                      <FwdLine m={m} />
                       {m.teamA && m.teamB && !m.winner && editingMatchId !== m.id && (
                         <span className="edit-link" onClick={() => openEdit(m.id)}>✏️ Resultado</span>
                       )}
@@ -498,6 +505,7 @@ function LancarResultadoPage() {
         </>
       )}
     </div>
+    </GraphContext.Provider>
   );
 }
 
@@ -507,13 +515,15 @@ function BracketMatchBox({ m, participanteNome, editingMatchId, editingSets, set
   const editing = editingMatchId === m.id;
   return (
     <div className="match-box">
+      <JogoTag m={m} />
       <div className={`side ${m.winner && m.winner === m.teamA ? 'winner' : ''} ${isByeId(m.teamA) ? 'bye' : ''}`}>
-        {m.teamA ? participanteNome(m.teamA) : '—'}
+        <SlotName m={m} side="a" name={m.teamA ? participanteNome(m.teamA) : null} />
       </div>
       <div className="vs-div"></div>
       <div className={`side ${m.winner && m.winner === m.teamB ? 'winner' : ''} ${isByeId(m.teamB) ? 'bye' : ''}`}>
-        {m.teamB ? participanteNome(m.teamB) : '—'}
+        <SlotName m={m} side="b" name={m.teamB ? participanteNome(m.teamB) : null} />
       </div>
+      <FwdLine m={m} />
       {m.teamA && m.teamB && !m.winner && !editing && (
         <span className="edit-link" onClick={() => openEdit(m.id)}>✏️ Resultado</span>
       )}
@@ -532,6 +542,7 @@ function MatchRow({ m, participanteNome, editing, editingSets, setEditingSets, o
   const r = m.sets && m.sets.length ? computeSetsResult(m.sets) : null;
   return (
     <div className="match-row">
+      <JogoTag m={m} />
       <div className="match-top">
         <div className="match-teams">
           {participanteNome(m.teamA)} <span style={{ color: '#aaa' }}>vs</span> {participanteNome(m.teamB)}
