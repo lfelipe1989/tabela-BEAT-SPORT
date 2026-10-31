@@ -10,6 +10,7 @@ import {
   computeSetsResult,
   advanceBracket,
   generateKnockoutFromGroups,
+  bestNextPlaced,
   placementsFromBracket,
   thirdPlacePending,
   roundLabel,
@@ -44,6 +45,8 @@ export default function EtapaPage() {
   const [torneio, setTorneio] = useState(null);
   const [numGroups, setNumGroups] = useState(2);
   const [qualifiersPerGroup, setQualifiersPerGroup] = useState(2);
+  const [extraEnabled, setExtraEnabled] = useState(false);
+  const [extraQualifiers, setExtraQualifiers] = useState(1);
   const [editingMatchId, setEditingMatchId] = useState(null);
   const [editingSets, setEditingSets] = useState([[0, 0], [0, 0], [0, 0]]);
   const [finalResults, setFinalResults] = useState(null);
@@ -264,7 +267,8 @@ export default function EtapaPage() {
     }
 
     const result = performDraw(etapa.formato, teams, numGroups);
-    let t = { ...result, champion: null, qualifiersPerGroup };
+    const extra = extraEnabled && result.groups.length > 0 ? Math.min(extraQualifiers, result.groups.length) : 0;
+    let t = { ...result, champion: null, qualifiersPerGroup, extraQualifiers: extra };
     if (t.bracket) {
       const adv = advanceBracket(t.bracket, etapa.disputa_terceiro);
       t.bracket = adv.bracket;
@@ -341,7 +345,7 @@ export default function EtapaPage() {
 
   function handleGenKnockout() {
     const qtd = torneio.qualifiersPerGroup || qualifiersPerGroup;
-    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, teams);
+    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, teams, torneio.extraQualifiers || 0);
     if (!bracket) {
       alert('Não há duplas suficientes classificadas.');
       return;
@@ -437,6 +441,11 @@ export default function EtapaPage() {
   if (loading) return <div className="page"><div className="empty-hint">Carregando...</div></div>;
   if (!etapa) return <div className="page"><div className="empty-hint">Etapa não encontrada.</div></div>;
 
+  const extraIds = new Set(
+    torneio && torneio.groups
+      ? bestNextPlaced(torneio.groups, torneio.groupMatches, TIEBREAK, torneio.qualifiersPerGroup || qualifiersPerGroup, torneio.extraQualifiers || 0).map((t) => t.id)
+      : []
+  );
   const locked = etapa.status !== 'planejada';
 
   return (
@@ -763,6 +772,26 @@ export default function EtapaPage() {
               />
             </div>
           </div>
+          {etapa.formato === 'grupos_eliminatoria' && (
+            <div style={{ marginTop: 12 }}>
+              <label className="chk-wrap">
+                <input type="checkbox" checked={extraEnabled} onChange={(e) => setExtraEnabled(e.target.checked)} />{' '}
+                Classificar também os melhores {qualifiersPerGroup + 1}ºs colocados
+              </label>
+              {extraEnabled && (
+                <div className="field" style={{ marginTop: 8, maxWidth: 260 }}>
+                  <label className="field-label">Quantos melhores {qualifiersPerGroup + 1}ºs avançam (de {numGroups} grupo{numGroups > 1 ? 's' : ''})</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={numGroups}
+                    value={extraQualifiers}
+                    onChange={(e) => setExtraQualifiers(Math.max(1, Math.min(numGroups, parseInt(e.target.value) || 1)))}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -804,7 +833,7 @@ export default function EtapaPage() {
                     </thead>
                     <tbody>
                       {standings.map((t, i) => (
-                        <tr key={t.id} className={i < (torneio.qualifiersPerGroup || qualifiersPerGroup) ? 'qualified' : ''}>
+                        <tr key={t.id} className={i < (torneio.qualifiersPerGroup || qualifiersPerGroup) || extraIds.has(t.id) ? 'qualified' : ''}>
                           <td>{participanteNome(t.id)}</td>
                           <td>{t.jogos}</td>
                           <td>{t.vitorias}</td>

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../../lib/supabaseClient';
-import { computeStandings, computeSetsResult, roundLabel, isByeId, normalizeTorneio } from '../../../../lib/bracketEngine';
+import { computeStandings, computeSetsResult, roundLabel, isByeId, normalizeTorneio, bestNextPlaced } from '../../../../lib/bracketEngine';
 
 const TIEBREAK = ['confronto_direto', 'vitorias', 'saldo_sets', 'saldo_pontos', 'sets_pro', 'pontos_pro'];
 const FORMATOS = {
@@ -59,6 +59,11 @@ export default function VerEtapaPage() {
   if (!etapa) return <div className="page"><div className="empty-hint">Etapa não encontrada.</div></div>;
 
   const qualifiersPerGroup = (torneio && torneio.qualifiersPerGroup) || 2;
+  const extraIds = new Set(
+    torneio && torneio.groups
+      ? bestNextPlaced(torneio.groups, torneio.groupMatches, TIEBREAK, qualifiersPerGroup, torneio.extraQualifiers || 0).map((t) => t.id)
+      : []
+  );
 
   // partidas pendentes (para "próximos confrontos")
   let proximos = [];
@@ -193,7 +198,7 @@ export default function VerEtapaPage() {
                     </thead>
                     <tbody>
                       {standings.map((t, i) => (
-                        <tr key={t.id} className={i < qualifiersPerGroup ? 'qualified' : ''}>
+                        <tr key={t.id} className={i < qualifiersPerGroup || extraIds.has(t.id) ? 'qualified' : ''}>
                           <td>{participanteNome(t.id)}</td>
                           <td>{t.jogos}</td>
                           <td>{t.vitorias}</td>

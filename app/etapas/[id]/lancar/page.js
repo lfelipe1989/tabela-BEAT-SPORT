@@ -7,6 +7,7 @@ import {
   computeSetsResult,
   advanceBracket,
   generateKnockoutFromGroups,
+  bestNextPlaced,
   placementsFromBracket,
   thirdPlacePending,
   roundLabel,
@@ -147,7 +148,7 @@ function LancarResultadoPage() {
 
   function handleGenKnockout() {
     const qtd = torneio.qualifiersPerGroup || 2;
-    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, participantes.map((p) => ({ id: p.id })));
+    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, participantes.map((p) => ({ id: p.id })), torneio.extraQualifiers || 0);
     if (!bracket) {
       alert('Não há duplas suficientes classificadas.');
       return;
@@ -295,6 +296,7 @@ function LancarResultadoPage() {
               const standings = computeStandings(g, torneio.groupMatches, TIEBREAK);
               const matches = torneio.groupMatches.filter((m) => m.groupId === g.id);
               const qtd = torneio.qualifiersPerGroup || 2;
+              const extraIds = new Set(bestNextPlaced(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, torneio.extraQualifiers || 0).map((x) => x.id));
               return (
                 <div className="card group-card" key={g.id}>
                   <h3>{g.name}</h3>
@@ -310,7 +312,7 @@ function LancarResultadoPage() {
                     </thead>
                     <tbody>
                       {standings.map((t, i) => (
-                        <tr key={t.id} className={i < qtd ? 'qualified' : ''}>
+                        <tr key={t.id} className={i < qtd || extraIds.has(t.id) ? 'qualified' : ''}>
                           <td>{participanteNome(t.id)}</td>
                           <td>{t.jogos}</td>
                           <td>{t.vitorias}</td>
