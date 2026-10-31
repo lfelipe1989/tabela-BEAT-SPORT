@@ -202,3 +202,9 @@ table.standings tr.qualified td:first-child::before{ content:"✓ "; color: var(
 .stat-num{ font-family:'Oswald'; font-weight:700; font-size:22px; color:var(--accent); }
 .stat-label{ font-size:11px; color:var(--text-soft); text-transform:uppercase; }
 .badge-categoria{ background:var(--highlight); color:var(--n-black); font-weight:800; font-size:12px; padding:4px 12px; border-radius:999px; }
+
+/* Atividade recente da etapa (lista de etapas) */
+.etapa-pulse{ display:inline-block; padding:2px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+.etapa-pulse-verde{ background:#d6f5d6; color:#1d6b2a; }
+.etapa-pulse-amarelo{ background:#fff1b8; color:#8a6a00; }
+.etapa-pulse-vermelho{ background:#ffd9d6; color:#a3281b; }

@@ -30,8 +30,8 @@ export default function EtapasPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  async function load() {
-    setLoading(true);
+  async function load(silent) {
+    if (!silent) setLoading(true);
     const { data } = await supabase.from('etapas').select('*').order('data_evento', { ascending: false });
     setEtapas(data || []);
     const { data: lg } = await supabase.from('ligas').select('*').order('nome');
@@ -39,9 +39,26 @@ export default function EtapasPage() {
     setLoading(false);
   }
 
+  const [agora, setAgora] = useState(Date.now());
+
   useEffect(() => {
     load();
+    // atualiza a lista e as cores a cada 30s, sem piscar a tela
+    const t = setInterval(() => {
+      load(true);
+      setAgora(Date.now());
+    }, 30000);
+    return () => clearInterval(t);
   }, []);
+
+  // verde: atividade nos últimos 10 min; amarelo: até 30 min; vermelho: parada há mais de 30 min
+  function atividade(e) {
+    if (!e.atualizado_em) return { cor: 'vermelho', texto: 'sem movimentação registrada' };
+    const min = Math.max(0, Math.floor((agora - new Date(e.atualizado_em).getTime()) / 60000));
+    const cor = min <= 10 ? 'verde' : min <= 30 ? 'amarelo' : 'vermelho';
+    const texto = min < 1 ? 'agora' : min < 60 ? `há ${min} min` : `há ${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+    return { cor, texto: `última movimentação ${texto}` };
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -176,7 +193,14 @@ export default function EtapasPage() {
             <Link key={e.id} href={`/etapas/${e.id}`} className="team-row team-row-link">
               <span className="tname">{e.nome}</span>
               <span className="tmeta">
-                {MODALIDADES[e.modalidade]} · {FORMATOS[e.formato]} · {STATUS_LABEL[e.status]}
+                {MODALIDADES[e.modalidade]} · {FORMATOS[e.formato]} ·{' '}
+                {e.status === 'em_andamento' ? (
+                  <span className={`etapa-pulse etapa-pulse-${atividade(e).cor}`} title={atividade(e).texto}>
+                    {STATUS_LABEL[e.status]} · {atividade(e).texto.replace('última movimentação ', '')}
+                  </span>
+                ) : (
+                  STATUS_LABEL[e.status]
+                )}
               </span>
               <button className="icon-btn" onClick={(ev) => handleDelete(ev, e.id, e.nome)} title="Excluir etapa">
                 🗑️
