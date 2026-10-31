@@ -20,6 +20,7 @@ import {
   thirdPlacePendingDoubleElim,
   listByeSlots,
   normalizeTorneio,
+  findMatch,
   teamIdsInDraw,
   placeTeamOnBye,
   isByeId,
@@ -60,6 +61,7 @@ export default function EtapaPage() {
   const [editingParticipanteId, setEditingParticipanteId] = useState(null);
   const [participanteEditForm, setParticipanteEditForm] = useState(null);
   const [byeChoice, setByeChoice] = useState({});
+  const [saveError, setSaveError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,11 +106,18 @@ export default function EtapaPage() {
 
   async function saveEstado(t, status) {
     const password = getAdminPassword();
-    await fetch(`/api/etapas/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({ estado_chaveamento: t, status: status || 'em_andamento' }),
-    });
+    try {
+      const res = await fetch(`/api/etapas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ estado_chaveamento: t, status: status || 'em_andamento' }),
+      });
+      if (!res.ok) alert('Não foi possível salvar. Confira a internet e tente de novo.');
+      return res.ok;
+    } catch (err) {
+      alert('Sem conexão: a alteração NÃO foi salva. Tente de novo.');
+      return false;
+    }
   }
 
   async function handleAddParticipante(e) {
@@ -283,64 +292,38 @@ export default function EtapaPage() {
     setEditingSets([[0, 0], [0, 0], [0, 0]]);
   }
 
-  function saveMatch(matchId, isBracket) {
+  async function saveMatch(matchId) {
     const sets = editingSets.filter((s) => (s[0] || 0) !== 0 || (s[1] || 0) !== 0);
     if (sets.length === 0) {
       alert('Informe o placar de ao menos um set.');
       return;
     }
-    const r = computeSetsResult(sets);
-    setTorneio((prev) => {
-      let next = { ...prev };
-
-      if (next.doubleElim) {
-        const de = { ...next.doubleElim };
-        const applyResult = (m) => {
-          const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-          return { ...m, sets, winner };
-        };
-        if (de.finalMatch && de.finalMatch.id === matchId) {
-          de.finalMatch = applyResult(de.finalMatch);
-        } else if (de.thirdPlaceMatch && de.thirdPlaceMatch.id === matchId) {
-          de.thirdPlaceMatch = applyResult(de.thirdPlaceMatch);
-        } else if (de.semifinals && de.semifinals.some((m) => m.id === matchId)) {
-          de.semifinals = de.semifinals.map((m) => (m.id === matchId ? applyResult(m) : m));
-        } else {
-          de.winners = { rounds: de.winners.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
-          de.losers = { ...de.losers, rounds: de.losers.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
-        }
-        const adv = advanceDoubleElim(de, etapa.disputa_terceiro);
-        next.doubleElim = { ...de, ...adv };
-        saveEstado(next, 'em_andamento');
-        return next;
+    const m = findMatch(torneio, matchId);
+    setBusy(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`/api/etapas/${id}/jogo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': getAdminPassword() },
+        body: JSON.stringify({ matchId, sets, teamA: m ? m.teamA : null, teamB: m ? m.teamB : null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.torneio) setTorneio(data.torneio);
+      if (!res.ok) {
+        const msg = data.error || 'Não foi possível salvar o resultado. Tente de novo.';
+        setSaveError(msg);
+        alert(msg);
+        if (res.status === 409 || res.status === 404) setEditingMatchId(null);
+        setBusy(false);
+        return;
       }
-
-      if (!isBracket) {
-        next.groupMatches = next.groupMatches.map((m) => {
-          if (m.id !== matchId) return m;
-          const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-          return { ...m, sets, winner };
-        });
-      } else if (next.bracket.thirdPlaceMatch && next.bracket.thirdPlaceMatch.id === matchId) {
-        const tp = next.bracket.thirdPlaceMatch;
-        const winner = r.setsA > r.setsB ? tp.teamA : r.setsB > r.setsA ? tp.teamB : null;
-        next.bracket = { ...next.bracket, thirdPlaceMatch: { ...tp, sets, winner } };
-      } else {
-        const rounds = next.bracket.rounds.map((round) =>
-          round.map((m) => {
-            if (m.id !== matchId) return m;
-            const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-            return { ...m, sets, winner };
-          })
-        );
-        const advanced = advanceBracket({ rounds, thirdPlaceMatch: next.bracket.thirdPlaceMatch }, etapa.disputa_terceiro);
-        next.bracket = advanced.bracket;
-        next.champion = advanced.champion;
-      }
-      saveEstado(next, 'em_andamento');
-      return next;
-    });
-    setEditingMatchId(null);
+      setEditingMatchId(null);
+    } catch (err) {
+      const msg = 'Sem conexão: o resultado NÃO foi salvo. Confira a internet e toque em Salvar de novo.';
+      setSaveError(msg);
+      alert(msg);
+    }
+    setBusy(false);
   }
 
   function handleChangeClassificacao(patch) {
@@ -349,19 +332,25 @@ export default function EtapaPage() {
     saveEstado(next, 'em_andamento');
   }
 
-  function handleGenKnockout() {
-    const qtd = torneio.qualifiersPerGroup || qualifiersPerGroup;
-    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, teams, torneio.extraQualifiers || 0);
+  async function handleGenKnockout() {
+    // usa o estado MAIS RECENTE do banco (outro árbitro pode ter lançado jogos)
+    const { data: fresh } = await supabase.from('etapas').select('estado_chaveamento').eq('id', id).single();
+    const base = fresh && fresh.estado_chaveamento ? normalizeTorneio(fresh.estado_chaveamento, etapa.disputa_terceiro) : torneio;
+    if (base.bracket) {
+      setTorneio(base);
+      return;
+    }
+    const qtd = base.qualifiersPerGroup || qualifiersPerGroup;
+    let bracket = generateKnockoutFromGroups(base.groups, base.groupMatches, TIEBREAK, qtd, teams, base.extraQualifiers || 0);
     if (!bracket) {
       alert('Não há duplas suficientes classificadas.');
       return;
     }
     const adv = advanceBracket(bracket, etapa.disputa_terceiro);
-    setTorneio((prev) => {
-      const next = { ...prev, bracket: adv.bracket, champion: adv.champion };
-      saveEstado(next, 'em_andamento');
-      return next;
-    });
+    const next = { ...base, bracket: adv.bracket, champion: adv.champion };
+    setTorneio(next);
+    const ok = await saveEstado(next, 'em_andamento');
+    if (ok === false) alert('Não foi possível salvar a fase eliminatória. Confira a internet e tente de novo.');
   }
 
   async function handleFinalizar() {
@@ -631,6 +620,12 @@ export default function EtapaPage() {
               🔄 Reabrir etapa
             </button>
           </div>
+        </div>
+      )}
+
+{saveError && (
+        <div className="warning-box" style={{ borderColor: '#c0392b' }}>
+          ⚠️ {saveError}
         </div>
       )}
 

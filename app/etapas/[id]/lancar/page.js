@@ -17,6 +17,7 @@ import {
   thirdPlacePendingDoubleElim,
   isByeId,
   normalizeTorneio,
+  findMatch,
 } from '../../../../lib/bracketEngine';
 import { pontosPorColocacao } from '../../../../lib/ranking';
 
@@ -44,6 +45,7 @@ function LancarResultadoPage() {
   const [editingSets, setEditingSets] = useState([[0, 0], [0, 0], [0, 0]]);
   const [busy, setBusy] = useState(false);
   const [finalResults, setFinalResults] = useState(null);
+  const [saveError, setSaveError] = useState('');
 
   const load = useCallback(async () => {
     const { data: e } = await supabase.from('etapas').select('*').eq('id', id).single();
@@ -64,6 +66,16 @@ function LancarResultadoPage() {
     if (id) load();
   }, [id, load]);
 
+  // Atualiza sozinho a cada 20s (para ver resultados lançados por outros
+  // árbitros), sem interromper quem está digitando um placar.
+  useEffect(() => {
+    if (!id) return undefined;
+    const t = setInterval(() => {
+      if (!editingMatchId && !busy) load();
+    }, 20000);
+    return () => clearInterval(t);
+  }, [id, load, editingMatchId, busy]);
+
   function atletaNome(aid) {
     const a = atletas.find((x) => x.id === aid);
     return a ? a.apelido || a.nome : '—';
@@ -76,11 +88,16 @@ function LancarResultadoPage() {
   }
 
   async function saveEstado(t, status) {
-    await fetch(`/api/etapas/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-etapa-token': token },
-      body: JSON.stringify({ estado_chaveamento: t, status: status || 'em_andamento' }),
-    });
+    try {
+      const res = await fetch(`/api/etapas/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-etapa-token': token },
+        body: JSON.stringify({ estado_chaveamento: t, status: status || 'em_andamento' }),
+      });
+      return res.ok;
+    } catch (err) {
+      return false;
+    }
   }
 
   function openEdit(matchId) {
@@ -88,77 +105,59 @@ function LancarResultadoPage() {
     setEditingSets([[0, 0], [0, 0], [0, 0]]);
   }
 
-  function saveMatch(matchId, isBracket) {
+  async function saveMatch(matchId) {
     const sets = editingSets.filter((s) => (s[0] || 0) !== 0 || (s[1] || 0) !== 0);
     if (sets.length === 0) {
       alert('Informe o placar de ao menos um set.');
       return;
     }
-    const r = computeSetsResult(sets);
-    setTorneio((prev) => {
-      let next = { ...prev };
-      if (next.doubleElim) {
-        const de = { ...next.doubleElim };
-        const applyResult = (m) => {
-          const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-          return { ...m, sets, winner };
-        };
-        if (de.finalMatch && de.finalMatch.id === matchId) {
-          de.finalMatch = applyResult(de.finalMatch);
-        } else if (de.thirdPlaceMatch && de.thirdPlaceMatch.id === matchId) {
-          de.thirdPlaceMatch = applyResult(de.thirdPlaceMatch);
-        } else if (de.semifinals && de.semifinals.some((m) => m.id === matchId)) {
-          de.semifinals = de.semifinals.map((m) => (m.id === matchId ? applyResult(m) : m));
-        } else {
-          de.winners = { rounds: de.winners.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
-          de.losers = { ...de.losers, rounds: de.losers.rounds.map((round) => round.map((m) => (m.id === matchId ? applyResult(m) : m))) };
-        }
-        const adv = advanceDoubleElim(de, etapa.disputa_terceiro);
-        next.doubleElim = { ...de, ...adv };
-        saveEstado(next, 'em_andamento');
-        return next;
+    const m = findMatch(torneio, matchId);
+    setBusy(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`/api/etapas/${id}/jogo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-etapa-token': token },
+        body: JSON.stringify({ matchId, sets, teamA: m ? m.teamA : null, teamB: m ? m.teamB : null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.torneio) setTorneio(data.torneio);
+      if (!res.ok) {
+        const msg = data.error || 'Não foi possível salvar o resultado. Tente de novo.';
+        setSaveError(msg);
+        alert(msg);
+        if (res.status === 409 || res.status === 404) setEditingMatchId(null);
+        setBusy(false);
+        return;
       }
-      if (!isBracket) {
-        next.groupMatches = next.groupMatches.map((m) => {
-          if (m.id !== matchId) return m;
-          const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-          return { ...m, sets, winner };
-        });
-      } else if (next.bracket.thirdPlaceMatch && next.bracket.thirdPlaceMatch.id === matchId) {
-        const tp = next.bracket.thirdPlaceMatch;
-        const winner = r.setsA > r.setsB ? tp.teamA : r.setsB > r.setsA ? tp.teamB : null;
-        next.bracket = { ...next.bracket, thirdPlaceMatch: { ...tp, sets, winner } };
-      } else {
-        const rounds = next.bracket.rounds.map((round) =>
-          round.map((m) => {
-            if (m.id !== matchId) return m;
-            const winner = r.setsA > r.setsB ? m.teamA : r.setsB > r.setsA ? m.teamB : null;
-            return { ...m, sets, winner };
-          })
-        );
-        const advanced = advanceBracket({ rounds, thirdPlaceMatch: next.bracket.thirdPlaceMatch }, etapa.disputa_terceiro);
-        next.bracket = advanced.bracket;
-        next.champion = advanced.champion;
-      }
-      saveEstado(next, 'em_andamento');
-      return next;
-    });
-    setEditingMatchId(null);
+      setEditingMatchId(null);
+    } catch (err) {
+      const msg = 'Sem conexão: o resultado NÃO foi salvo. Confira a internet e toque em Salvar de novo.';
+      setSaveError(msg);
+      alert(msg);
+    }
+    setBusy(false);
   }
 
-  function handleGenKnockout() {
-    const qtd = torneio.qualifiersPerGroup || 2;
-    let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, participantes.map((p) => ({ id: p.id })), torneio.extraQualifiers || 0);
+  async function handleGenKnockout() {
+    // usa o estado MAIS RECENTE do banco (outro árbitro pode ter lançado jogos)
+    const { data: fresh } = await supabase.from('etapas').select('estado_chaveamento').eq('id', id).single();
+    const base = fresh && fresh.estado_chaveamento ? normalizeTorneio(fresh.estado_chaveamento, etapa.disputa_terceiro) : torneio;
+    if (base.bracket) {
+      setTorneio(base);
+      return;
+    }
+    const qtd = base.qualifiersPerGroup || 2;
+    let bracket = generateKnockoutFromGroups(base.groups, base.groupMatches, TIEBREAK, qtd, participantes.map((p) => ({ id: p.id })), base.extraQualifiers || 0);
     if (!bracket) {
       alert('Não há duplas suficientes classificadas.');
       return;
     }
     const adv = advanceBracket(bracket, etapa.disputa_terceiro);
-    setTorneio((prev) => {
-      const next = { ...prev, bracket: adv.bracket, champion: adv.champion };
-      saveEstado(next, 'em_andamento');
-      return next;
-    });
+    const next = { ...base, bracket: adv.bracket, champion: adv.champion };
+    setTorneio(next);
+    const ok = await saveEstado(next, 'em_andamento');
+    if (ok === false) alert('Não foi possível salvar a fase eliminatória. Confira a internet e tente de novo.');
   }
 
   async function handleFinalizar() {
@@ -246,6 +245,11 @@ function LancarResultadoPage() {
         </div>
       </header>
 
+{saveError && (
+        <div className="warning-box" style={{ borderColor: '#c0392b' }}>
+          ⚠️ {saveError}
+        </div>
+      )}
       <div className="warning-box">Você está lançando resultados desta etapa por um link compartilhado. Dá pra registrar placares e avançar as fases, mas não pra editar duplas ou apagar a etapa.</div>
 
       {etapa.status === 'finalizada' && finalResults && (
