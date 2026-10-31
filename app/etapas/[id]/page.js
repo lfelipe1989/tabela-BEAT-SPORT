@@ -343,6 +343,12 @@ export default function EtapaPage() {
     setEditingMatchId(null);
   }
 
+  function handleChangeClassificacao(patch) {
+    const next = { ...torneio, ...patch };
+    setTorneio(next);
+    saveEstado(next, 'em_andamento');
+  }
+
   function handleGenKnockout() {
     const qtd = torneio.qualifiersPerGroup || qualifiersPerGroup;
     let bracket = generateKnockoutFromGroups(torneio.groups, torneio.groupMatches, TIEBREAK, qtd, teams, torneio.extraQualifiers || 0);
@@ -871,6 +877,32 @@ export default function EtapaPage() {
               );
             })}
           </div>
+          {etapa.formato === 'grupos_eliminatoria' && !torneio.bracket && etapa.status !== 'finalizada' && (
+            <div className="card">
+              <h3 style={{ margin: '0 0 8px' }}>Quem se classifica (editável até gerar a fase eliminatória)</h3>
+              <div className="grid2">
+                <div className="field">
+                  <label className="field-label">Classificados por grupo</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={torneio.qualifiersPerGroup || 2}
+                    onChange={(e) => handleChangeClassificacao({ qualifiersPerGroup: Math.max(1, parseInt(e.target.value) || 1) })}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label">Melhores {(torneio.qualifiersPerGroup || 2) + 1}ºs que também avançam (0 = nenhum)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={torneio.groups.length}
+                    value={torneio.extraQualifiers || 0}
+                    onChange={(e) => handleChangeClassificacao({ extraQualifiers: Math.max(0, Math.min(torneio.groups.length, parseInt(e.target.value) || 0)) })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           {etapa.formato === 'grupos_eliminatoria' && !torneio.bracket && (
             <div className="footer-actions">
               <button className="btn btn-primary" onClick={handleGenKnockout}>
